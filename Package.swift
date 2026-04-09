@@ -1,6 +1,10 @@
 // swift-tools-version: 5.10
 
+import Foundation
 import PackageDescription
+
+let packageDirectory = FileManager.default.currentDirectoryPath
+let sherpaLibDirectory = "\(packageDirectory)/Vendor/sherpa-onnx/lib"
 
 let package = Package(
     name: "SoundFlow",
@@ -11,9 +15,27 @@ let package = Package(
         .executable(name: "SoundFlow", targets: ["SoundFlow"]),
     ],
     targets: [
+        .systemLibrary(
+            name: "CSherpaOnnx",
+            path: "Sources/CSherpaOnnx"
+        ),
         .executableTarget(
             name: "SoundFlow",
-            path: "Sources"
+            dependencies: [
+                "CSherpaOnnx",
+            ],
+            path: "Sources",
+            exclude: [
+                "CSherpaOnnx",
+            ],
+            linkerSettings: [
+                .linkedLibrary("onnxruntime"),
+                .unsafeFlags([
+                    "-L", sherpaLibDirectory,
+                    "-Xlinker", "-rpath",
+                    "-Xlinker", sherpaLibDirectory,
+                ]),
+            ]
         ),
     ]
 )

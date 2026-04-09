@@ -3,6 +3,7 @@ import Foundation
 
 final class AudioCaptureService {
     var onLevel: ((Double) -> Void)?
+    var onSamples: (([Float], Int) -> Void)?
 
     private let engine = AVAudioEngine()
     private var isRunning = false
@@ -15,7 +16,9 @@ final class AudioCaptureService {
 
         inputNode.removeTap(onBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+            let samples = Self.samples(from: buffer)
             let level = Self.level(from: buffer)
+            self?.onSamples?(samples, Int(format.sampleRate))
             DispatchQueue.main.async {
                 self?.onLevel?(level)
             }
@@ -43,19 +46,46 @@ final class AudioCaptureService {
     }
 
     private static func level(from buffer: AVAudioPCMBuffer) -> Double {
-        guard let channelData = buffer.floatChannelData else { return 0 }
-
-        let channel = channelData[0]
-        let frameLength = Int(buffer.frameLength)
-        guard frameLength > 0 else { return 0 }
+        let samples = samples(from: buffer)
+        guard !samples.isEmpty else { return 0 }
 
         var rms = Float(0)
-        for frame in 0..<frameLength {
-            let sample = channel[frame]
+        for sample in samples {
             rms += sample * sample
         }
 
-        rms = sqrt(rms / Float(frameLength))
+        rms = sqrt(rms / Float(samples.count))
         return min(max(Double(rms) * 20, 0), 1)
+    }
+
+    private static func samples(from buffer: AVAudioPCMBuffer) -> [Float] {
+        let frameLength = Int(buffer.frameLength)
+        let channelCount = Int(buffer.format.channelCount)
+
+        guard frameLength > 0,
+              channelCount > 0,
+              let channelData = buffer.floatChannelData else {
+            return []
+        }
+
+        if channelCount == 1 {
+            let channel = channelData[0]
+            return Array(UnsafeBufferPointer(start: channel, count: frameLength))
+        }
+
+        var mono = Array(repeating: Float.zero, count: frameLength)
+        for channelIndex in 0..<channelCount {
+            let channel = channelData[channelIndex]
+            for frame in 0..<frameLength {
+                mono[frame] += channel[frame]
+            }
+        }
+
+        let divisor = Float(channelCount)
+        for frame in 0..<frameLength {
+            mono[frame] /= divisor
+        }
+
+        return mono
     }
 }

@@ -1,6 +1,9 @@
 import Foundation
 
-final class MockPostProcessor {
+struct MockPostProcessor: TextPostProcessing {
+    let displayName = PostProcessorBackend.mockGemma.rawValue
+    let model: ModelDescriptor
+
     func process(_ text: String) async -> String {
         var output = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !output.isEmpty else { return "你好，SoundFlow。" }

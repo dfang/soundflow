@@ -1,6 +1,8 @@
 import Foundation
 
-final class MockTranscriptionService {
+final class MockTranscriptionService: TranscriptionService {
+    let displayName = ASRBackend.mockSenseVoice.rawValue
+    let model: ModelDescriptor
     var onPreview: ((String) -> Void)?
 
     private let tokens = [
@@ -16,7 +18,11 @@ final class MockTranscriptionService {
     private var currentText = ""
     private var tokenIndex = 0
 
-    func start() {
+    init(model: ModelDescriptor) {
+        self.model = model
+    }
+
+    func start() throws {
         stopTimer()
 
         currentText = ""
@@ -28,11 +34,22 @@ final class MockTranscriptionService {
         }
     }
 
-    func stop() -> String {
+    func appendAudio(samples: [Float], sampleRate: Int) {
+        _ = samples
+        _ = sampleRate
+    }
+
+    func stop() async throws -> String {
         stopTimer()
 
         let trimmed = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "帮我 review 一下这个 github pr" : trimmed
+    }
+
+    func cancel() {
+        stopTimer()
+        currentText = ""
+        tokenIndex = 0
     }
 
     private func emitNextToken() {

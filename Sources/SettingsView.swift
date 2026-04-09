@@ -10,8 +10,10 @@ struct SettingsView: View {
 
             Group {
                 settingsRow("Hotkey", value: "Right Control")
-                settingsRow("ASR", value: "SenseVoice Small (integration placeholder)")
-                settingsRow("Post-Processing", value: "Gemma 4 E4B (commit-time placeholder)")
+                settingsRow("ASR Backend", value: model.asrBackendName)
+                settingsRow("ASR Model", value: model.asrModelName)
+                settingsRow("ASR Source", value: model.asrModelSource)
+                settingsRow("Post-Processing", value: "\(model.postProcessorName) / \(model.postProcessorModelName)")
                 settingsRow("Preview UI", value: "Bottom floating HUD")
             }
 
@@ -19,7 +21,7 @@ struct SettingsView: View {
 
             Text("Current behavior")
                 .font(.headline)
-            Text("This MVP wires the menu bar app, global hotkey, audio capture, bottom HUD, confirm/cancel flow, and focused-app output. MLX model integration points are scaffolded with mock transcription and mock post-processing.")
+            Text("This build uses the local SenseVoice ONNX model through sherpa-onnx for ASR, while keeping post-processing pluggable. The menu bar app, global hotkey, audio capture, bottom HUD, confirm/cancel flow, and focused-app output all stay behind the same runtime abstraction.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

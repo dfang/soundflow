@@ -10,7 +10,7 @@ final class HUDWindowController {
         let hostingView = NSHostingView(rootView: rootView)
 
         panel = FloatingPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 220),
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 188),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
@@ -39,7 +39,7 @@ final class HUDWindowController {
         guard let visibleFrame = screen?.visibleFrame else { return }
 
         let width: CGFloat = 620
-        let height: CGFloat = 220
+        let height: CGFloat = 188
         let origin = NSPoint(
             x: visibleFrame.midX - width / 2,
             y: visibleFrame.minY + 48

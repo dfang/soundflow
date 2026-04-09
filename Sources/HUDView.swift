@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HUDView: View {
     @ObservedObject var model: SoundFlowModel
+    private let bottomAnchorID = "hud-preview-bottom"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -20,17 +21,28 @@ struct HUDView: View {
                     .background(.white.opacity(0.12), in: Capsule())
             }
 
-            Text(model.previewText)
-                .font(.system(size: 21, weight: .medium, design: .rounded))
-                .foregroundStyle(.primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .lineLimit(4)
-                .multilineTextAlignment(.leading)
-                .textSelection(.enabled)
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    Text(model.previewText)
+                        .font(.system(size: 21, weight: .medium, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .multilineTextAlignment(.leading)
+                        .textSelection(.enabled)
 
-            if model.shouldShowAudioMeter {
-                ProgressView(value: model.audioLevel)
-                    .tint(model.phaseColor)
+                    Color.clear
+                        .frame(height: 1)
+                        .id(bottomAnchorID)
+                }
+                .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 118, alignment: .topLeading)
+                .onAppear {
+                    proxy.scrollTo(bottomAnchorID, anchor: .bottom)
+                }
+                .onChange(of: model.previewText) { _, _ in
+                    withAnimation(.easeOut(duration: 0.16)) {
+                        proxy.scrollTo(bottomAnchorID, anchor: .bottom)
+                    }
+                }
             }
 
             HStack {

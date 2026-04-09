@@ -25,7 +25,7 @@ struct TextOutputService {
 
         if let targetApplication, targetApplication != .current {
             targetApplication.unhide()
-            let didActivate = targetApplication.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+            let didActivate = targetApplication.activate(options: [.activateAllWindows])
 
             DispatchQueue.main.asyncAfter(deadline: .now() + activationDelay) {
                 let frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
@@ -33,7 +33,7 @@ struct TextOutputService {
 
                 if !didActivate || frontmostBundleID != targetBundleID {
                     targetApplication.unhide()
-                    _ = targetApplication.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+                    _ = targetApplication.activate(options: [.activateAllWindows])
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                         simulatePaste()
                     }

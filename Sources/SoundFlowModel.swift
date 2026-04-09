@@ -4,7 +4,7 @@ import SwiftUI
 
 @MainActor
 final class SoundFlowModel: ObservableObject {
-    static let shared = SoundFlowModel()
+    static let shared = SoundFlowModel(runtime: .default)
 
     @Published private(set) var phase: RecordingPhase = .idle
     @Published private(set) var previewText = "Press Right Control to start speaking."
@@ -12,12 +12,18 @@ final class SoundFlowModel: ObservableObject {
     @Published private(set) var lastCommittedText = ""
     @Published private(set) var errorMessage: String?
     @Published private(set) var isHUDVisible = false
+    @Published private(set) var asrBackendName: String
+    @Published private(set) var postProcessorName: String
+    @Published private(set) var asrModelName: String
+    @Published private(set) var asrModelSource: String
+    @Published private(set) var postProcessorModelName: String
 
     private let permissionManager = PermissionManager()
     private let audioCaptureService = AudioCaptureService()
-    private let transcriptionService = MockTranscriptionService()
-    private let postProcessor = MockPostProcessor()
     private let textOutputService = TextOutputService()
+    private let runtime: AppRuntime
+    private let transcriptionService: any TranscriptionService
+    private let postProcessor: any TextPostProcessing
 
     private var hotKeyService: GlobalHotKeyService?
     private var hudController: HUDWindowController?
@@ -25,9 +31,22 @@ final class SoundFlowModel: ObservableObject {
     private var didBootstrap = false
     private var targetApplication: NSRunningApplication?
 
-    private init() {
+    private init(runtime: AppRuntime) {
+        self.runtime = runtime
+        self.transcriptionService = runtime.transcriptionService
+        self.postProcessor = runtime.postProcessor
+        self.asrBackendName = runtime.configuration.asrBackend.rawValue
+        self.postProcessorName = runtime.configuration.postProcessorBackend.rawValue
+        self.asrModelName = runtime.configuration.selectedASRModel.displayName
+        self.asrModelSource = runtime.configuration.selectedASRModel.source.displayName
+        self.postProcessorModelName = runtime.configuration.selectedPostProcessorModel.displayName
+
         audioCaptureService.onLevel = { [weak self] level in
             self?.audioLevel = level
+        }
+
+        audioCaptureService.onSamples = { [weak self] samples, sampleRate in
+            self?.transcriptionService.appendAudio(samples: samples, sampleRate: sampleRate)
         }
 
         transcriptionService.onPreview = { [weak self] text in
@@ -126,6 +145,10 @@ final class SoundFlowModel: ObservableObject {
         phase == .recording
     }
 
+    var runtimeSummary: String {
+        "\(asrBackendName) -> \(postProcessorName)"
+    }
+
     func handleHotKey() {
         switch phase {
         case .idle, .error:
@@ -179,7 +202,14 @@ final class SoundFlowModel: ObservableObject {
             return
         }
 
-        transcriptionService.start()
+        do {
+            try transcriptionService.start()
+        } catch {
+            audioCaptureService.stop()
+            setError("Failed to initialize ASR: \(error.localizedDescription)")
+            return
+        }
+
         previewText = "Listening..."
         audioLevel = 0
         setPhase(.recording)
@@ -191,25 +221,39 @@ final class SoundFlowModel: ObservableObject {
 
         setPhase(.processing)
         audioCaptureService.stop()
-        let rawText = transcriptionService.stop()
 
         Task {
-            let processedText = await postProcessor.process(rawText)
-            await MainActor.run {
-                self.finishCommit(with: processedText)
+            do {
+                let rawText = try await transcriptionService.stop()
+                let processedText = await postProcessor.process(rawText)
+                await MainActor.run {
+                    self.finishCommit(with: processedText)
+                }
+            } catch {
+                await MainActor.run {
+                    self.setError("ASR failed: \(error.localizedDescription)")
+                    self.scheduleHUDDismiss(after: 2.0)
+                }
             }
         }
     }
 
     private func finishCommit(with text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            setError("No speech detected.")
+            scheduleHUDDismiss(after: 1.4)
+            return
+        }
+
         setPhase(.committing)
-        lastCommittedText = text
-        previewText = text
+        lastCommittedText = trimmed
+        previewText = trimmed
 
         hideHUD()
 
         let result = textOutputService.output(
-            text,
+            trimmed,
             targetApplication: targetApplication,
             promptForAccessibility: true
         )
@@ -229,7 +273,7 @@ final class SoundFlowModel: ObservableObject {
     private func cancelRecording() {
         if phase == .recording {
             audioCaptureService.stop()
-            _ = transcriptionService.stop()
+            transcriptionService.cancel()
         }
 
         setPhase(.idle)
