@@ -1,0 +1,84 @@
+import SwiftUI
+
+struct HUDView: View {
+    @ObservedObject var model: SoundFlowModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center) {
+                Label(model.phaseLabel, systemImage: model.menuBarSymbol)
+                    .font(.headline)
+                    .foregroundStyle(model.phaseColor)
+
+                Spacer()
+
+                Text("Right Ctrl")
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.white.opacity(0.12), in: Capsule())
+            }
+
+            Text(model.previewText)
+                .font(.system(size: 21, weight: .medium, design: .rounded))
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .lineLimit(4)
+                .multilineTextAlignment(.leading)
+                .textSelection(.enabled)
+
+            if model.shouldShowAudioMeter {
+                ProgressView(value: model.audioLevel)
+                    .tint(model.phaseColor)
+            }
+
+            HStack {
+                Text("Enter confirm, Esc cancel")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button(model.secondaryActionTitle) {
+                    if model.phase == .recording {
+                        model.cancelRecordingFromUI()
+                    } else {
+                        model.dismissHUD()
+                    }
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Button(model.primaryActionTitle) {
+                    if model.phase == .recording {
+                        model.commitRecordingFromUI()
+                    } else {
+                        model.dismissHUD()
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(model.phase != .recording && model.phase != .error)
+            }
+        }
+        .padding(20)
+        .frame(width: 620)
+        .background(background)
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(.white.opacity(0.18), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .shadow(color: .black.opacity(0.18), radius: 28, x: 0, y: 16)
+    }
+
+    private var background: some View {
+        LinearGradient(
+            colors: [
+                Color(red: 0.10, green: 0.13, blue: 0.18),
+                Color(red: 0.14, green: 0.17, blue: 0.23),
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+}
