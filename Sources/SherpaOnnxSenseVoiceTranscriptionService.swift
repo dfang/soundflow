@@ -7,7 +7,6 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
 
     private let lock = NSLock()
     private let decodeQueue = DispatchQueue(label: "app.soundflow.asr.decode")
-    private var preSpeechSamples: [Float] = []
     private var bufferedSamples: [Float] = []
     private var sampleRate = 16_000
     private var sessionID: UInt64 = 0
@@ -23,7 +22,6 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
     private let previewStrideSamples = 4_000
     private let previewReuseSlackSamples = 16_000
     private let previewCoverageThreshold = 0.85
-    private let preSpeechBufferSamples = 6_400
 
     init(model: ModelDescriptor) {
         self.model = model
@@ -35,7 +33,6 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
 
         lock.lock()
         sessionID &+= 1
-        preSpeechSamples.removeAll(keepingCapacity: true)
         bufferedSamples.removeAll(keepingCapacity: true)
         sampleRate = 16_000
         latestPreviewText = ""
@@ -59,22 +56,14 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
 
         lock.lock()
         self.sampleRate = sampleRate
+        bufferedSamples.append(contentsOf: samples)
         let vad = self.vad
         vad?.acceptWaveform(samples: samples)
 
         if !speechDetected {
-            preSpeechSamples.append(contentsOf: samples)
-            if preSpeechSamples.count > preSpeechBufferSamples {
-                preSpeechSamples.removeFirst(preSpeechSamples.count - preSpeechBufferSamples)
-            }
-
             if (vad?.isSpeechDetected() == true) || (vad?.isEmpty() == false) {
                 speechDetected = true
-                bufferedSamples = preSpeechSamples
-                preSpeechSamples.removeAll(keepingCapacity: true)
             }
-        } else {
-            bufferedSamples.append(contentsOf: samples)
         }
 
         guard speechDetected else {
@@ -132,7 +121,6 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
     func cancel() {
         lock.lock()
         sessionID &+= 1
-        preSpeechSamples.removeAll(keepingCapacity: false)
         bufferedSamples.removeAll(keepingCapacity: false)
         sampleRate = 16_000
         latestPreviewText = ""
@@ -190,9 +178,9 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
         let vadPaths = try ModelPathResolver.resolveVADModelPaths()
         let sileroConfig = sherpaOnnxSileroVadModelConfig(
             model: vadPaths.model.path,
-            threshold: 0.35,
-            minSilenceDuration: 0.14,
-            minSpeechDuration: 0.08,
+            threshold: 0.15,
+            minSilenceDuration: 0.12,
+            minSpeechDuration: 0.06,
             windowSize: 512,
             maxSpeechDuration: 30.0
         )
@@ -242,8 +230,6 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
             vad?.flush()
             if (vad?.isSpeechDetected() == true) || (vad?.isEmpty() == false) {
                 speechDetected = true
-                bufferedSamples = preSpeechSamples
-                preSpeechSamples.removeAll(keepingCapacity: true)
             }
         }
         lock.unlock()
@@ -252,7 +238,6 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
     private func resetState() {
         lock.lock()
         sessionID &+= 1
-        preSpeechSamples.removeAll(keepingCapacity: false)
         bufferedSamples.removeAll(keepingCapacity: false)
         sampleRate = 16_000
         latestPreviewText = ""

@@ -10,7 +10,7 @@ struct AppRuntime {
     private static func makeDefault() -> AppRuntime {
         let configuration = RuntimeConfiguration(
             asrBackend: .sherpaSenseVoice,
-            postProcessorBackend: .mockGemma,
+            postProcessorBackend: .deepseek,
             selectedASRModel: ModelCatalog.defaultASRModel,
             selectedPostProcessorModel: ModelCatalog.defaultPostProcessorModel
         )
@@ -35,9 +35,12 @@ enum ASRBackend: String {
     case sherpaSenseVoice = "Sherpa-ONNX SenseVoice"
 }
 
-enum PostProcessorBackend: String {
+enum PostProcessorBackend: String, CaseIterable {
+    case disabled = "Disabled"
     case mockGemma = "Mock Gemma"
+    case ollamaGemma = "Ollama Gemma"
     case mlxGemma = "MLX Gemma"
+    case deepseek = "DeepSeek"
 }
 
 enum ServiceFactory {
@@ -52,10 +55,16 @@ enum ServiceFactory {
 
     static func makePostProcessor(for configuration: RuntimeConfiguration) -> any TextPostProcessing {
         switch configuration.postProcessorBackend {
+        case .disabled:
+            return PassthroughPostProcessor(model: configuration.selectedPostProcessorModel)
         case .mockGemma:
             return MockPostProcessor(model: configuration.selectedPostProcessorModel)
+        case .ollamaGemma:
+            return OllamaGemmaPostProcessor(model: configuration.selectedPostProcessorModel)
         case .mlxGemma:
             return PlaceholderGemmaPostProcessor(model: configuration.selectedPostProcessorModel)
+        case .deepseek:
+            return DeepseekPostProcessor(model: configuration.selectedPostProcessorModel)
         }
     }
 }

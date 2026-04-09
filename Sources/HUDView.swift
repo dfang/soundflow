@@ -2,14 +2,22 @@ import SwiftUI
 
 struct HUDView: View {
     @ObservedObject var model: SoundFlowModel
+    @State private var commitFlash = false
+    @State private var hudScale: CGFloat = 1.0
+    @State private var hudOpacity: CGFloat = 1.0
+
     private let bottomAnchorID = "hud-preview-bottom"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .center) {
-                Label(model.phaseLabel, systemImage: model.menuBarSymbol)
-                    .font(.headline)
-                    .foregroundStyle(model.phaseColor)
+                HStack(spacing: 8) {
+                    Label(model.phaseLabel, systemImage: model.menuBarSymbol)
+                        .font(.headline)
+                        .foregroundStyle(model.phaseColor)
+
+                    processingOverlay
+                }
 
                 Spacer()
 
@@ -81,6 +89,68 @@ struct HUDView: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .shadow(color: .black.opacity(0.18), radius: 28, x: 0, y: 16)
+        .scaleEffect(hudScale)
+        .opacity(hudOpacity)
+        .overlay(successOverlay)
+        .onChange(of: model.commitFeedbackToken) { _, _ in
+            animateCommitFeedback()
+        }
+        .onChange(of: model.showSuccess) { _, showSuccess in
+            withAnimation(.easeInOut(duration: 0.18)) {
+                hudOpacity = showSuccess ? 0.92 : 1.0
+                hudScale = showSuccess ? 0.985 : 1.0
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var processingOverlay: some View {
+        if model.phase == .processing || model.phase == .committing {
+            Circle()
+                .trim(from: 0, to: 0.3)
+                .stroke(model.phaseColor, lineWidth: 2)
+                .frame(width: 14, height: 14)
+                .rotationEffect(.degrees(commitFlash ? 360 : 0))
+                .onAppear {
+                    withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) {
+                        commitFlash = true
+                    }
+                }
+                .onDisappear {
+                    commitFlash = false
+                }
+        }
+    }
+
+    @ViewBuilder
+    private var successOverlay: some View {
+        if model.showSuccess {
+            ZStack {
+                Color.black.opacity(0.4)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 48, weight: .medium))
+                    .foregroundStyle(.green)
+                    .transition(.scale.combined(with: .opacity))
+            }
+            .allowsHitTesting(false)
+        }
+    }
+
+    private func animateCommitFeedback() {
+        withAnimation(.easeInOut(duration: 0.12)) {
+            hudScale = 1.012
+            hudOpacity = 0.97
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.easeInOut(duration: 0.12)) {
+                hudScale = 1.0
+                if !model.showSuccess {
+                    hudOpacity = 1.0
+                }
+            }
+        }
     }
 
     private var background: some View {

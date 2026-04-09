@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var model: SoundFlowModel
+    @AppStorage("deepseekApiKey") private var apiKey = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -19,9 +20,19 @@ struct SettingsView: View {
 
             Divider()
 
+            Text("DeepSeek API Key")
+                .font(.headline)
+            SecureField("sk-...", text: $apiKey)
+                .textFieldStyle(.roundedBorder)
+            Text("Required for cloud post-processing via DeepSeek")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Divider()
+
             Text("Current behavior")
                 .font(.headline)
-            Text("This build uses the local SenseVoice ONNX model through sherpa-onnx for ASR, while keeping post-processing pluggable. The menu bar app, global hotkey, audio capture, bottom HUD, confirm/cancel flow, and focused-app output all stay behind the same runtime abstraction.")
+            Text("This build uses the local SenseVoice ONNX model through sherpa-onnx for ASR. Post-processing is currently disabled so you can validate the raw ASR path without Gemma or fallback formatting.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

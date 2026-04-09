@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 final class HUDWindowController {
     private let panel: FloatingPanel
+    private var isVisible = false
 
     init(model: SoundFlowModel) {
         let rootView = HUDView(model: model)
@@ -22,16 +23,42 @@ final class HUDWindowController {
         panel.level = .statusBar
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
         panel.hidesOnDeactivate = false
+        panel.alphaValue = 0
     }
 
     func show() {
         positionPanel()
         NSApp.activate(ignoringOtherApps: true)
+        guard !isVisible else {
+            panel.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        isVisible = true
+        panel.alphaValue = 0
         panel.makeKeyAndOrderFront(nil)
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.14
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 1
+        }
     }
 
     func hide() {
-        panel.orderOut(nil)
+        guard isVisible else { return }
+        isVisible = false
+
+        NSAnimationContext.runAnimationGroup(
+            { context in
+                context.duration = 0.12
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                panel.animator().alphaValue = 0
+            },
+            completionHandler: { [panel] in
+                panel.orderOut(nil)
+            }
+        )
     }
 
     private func positionPanel() {

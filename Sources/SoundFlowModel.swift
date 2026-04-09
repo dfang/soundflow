@@ -12,6 +12,8 @@ final class SoundFlowModel: ObservableObject {
     @Published private(set) var lastCommittedText = ""
     @Published private(set) var errorMessage: String?
     @Published private(set) var isHUDVisible = false
+    @Published private(set) var showSuccess = false
+    @Published private(set) var commitFeedbackToken = 0
     @Published private(set) var asrBackendName: String
     @Published private(set) var postProcessorName: String
     @Published private(set) var asrModelName: String
@@ -30,6 +32,7 @@ final class SoundFlowModel: ObservableObject {
     private var keyMonitor: Any?
     private var didBootstrap = false
     private var targetApplication: NSRunningApplication?
+    private var pendingCommitWorkItem: DispatchWorkItem?
 
     private init(runtime: AppRuntime) {
         self.runtime = runtime
@@ -169,7 +172,7 @@ final class SoundFlowModel: ObservableObject {
     }
 
     func commitRecordingFromUI() {
-        commitRecording()
+        requestCommitWithFeedback()
     }
 
     func cancelRecordingFromUI() {
@@ -177,16 +180,20 @@ final class SoundFlowModel: ObservableObject {
     }
 
     func dismissHUD() {
+        cancelPendingCommit()
         setPhase(.idle)
         errorMessage = nil
+        showSuccess = false
         targetApplication = nil
         hideHUD()
         previewText = "Press Right Control to start speaking."
     }
 
     private func beginRecording() async {
+        cancelPendingCommit()
         errorMessage = nil
         lastCommittedText = ""
+        showSuccess = false
         targetApplication = captureCurrentTargetApplication()
 
         let microphoneGranted = await permissionManager.requestMicrophonePermission()
@@ -218,6 +225,7 @@ final class SoundFlowModel: ObservableObject {
 
     private func commitRecording() {
         guard phase == .recording else { return }
+        cancelPendingCommit()
 
         setPhase(.processing)
         audioCaptureService.stop()
@@ -250,8 +258,6 @@ final class SoundFlowModel: ObservableObject {
         lastCommittedText = trimmed
         previewText = trimmed
 
-        hideHUD()
-
         let result = textOutputService.output(
             trimmed,
             targetApplication: targetApplication,
@@ -260,10 +266,16 @@ final class SoundFlowModel: ObservableObject {
 
         switch result {
         case .pasted:
-            setPhase(.idle)
-            previewText = "Press Right Control to start speaking."
-            errorMessage = nil
-            targetApplication = nil
+            showSuccess = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                guard let self else { return }
+                self.hideHUD()
+                self.showSuccess = false
+                self.setPhase(.idle)
+                self.previewText = "Press Right Control to start speaking."
+                self.errorMessage = nil
+                self.targetApplication = nil
+            }
         case .copiedToClipboard:
             setError("Copied to clipboard. Grant Accessibility permission to auto-paste.")
             scheduleHUDDismiss(after: 2.0)
@@ -271,19 +283,23 @@ final class SoundFlowModel: ObservableObject {
     }
 
     private func cancelRecording() {
+        cancelPendingCommit()
         if phase == .recording {
             audioCaptureService.stop()
             transcriptionService.cancel()
         }
 
         setPhase(.idle)
+        showSuccess = false
         previewText = "Cancelled."
         audioLevel = 0
         scheduleHUDDismiss(after: 0.2)
     }
 
     private func setError(_ message: String) {
+        cancelPendingCommit()
         errorMessage = message
+        showSuccess = false
         previewText = message
         setPhase(.error)
         showHUD()
@@ -324,6 +340,26 @@ final class SoundFlowModel: ObservableObject {
         }
     }
 
+    private func requestCommitWithFeedback() {
+        guard phase == .recording, pendingCommitWorkItem == nil else { return }
+
+        commitFeedbackToken += 1
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.pendingCommitWorkItem = nil
+            self.commitRecording()
+        }
+
+        pendingCommitWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
+    }
+
+    private func cancelPendingCommit() {
+        pendingCommitWorkItem?.cancel()
+        pendingCommitWorkItem = nil
+    }
+
     private func installKeyMonitor() {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, self.isHUDVisible else { return event }
@@ -334,7 +370,7 @@ final class SoundFlowModel: ObservableObject {
                 return nil
             case Int(kVK_Return), Int(kVK_ANSI_KeypadEnter):
                 if self.phase == .recording {
-                    self.commitRecording()
+                    self.requestCommitWithFeedback()
                     return nil
                 }
                 if self.phase == .error {
