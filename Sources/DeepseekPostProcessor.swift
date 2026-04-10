@@ -49,6 +49,11 @@ struct DeepseekPostProcessor: TextPostProcessing {
                 return await fallback(trimmed)
             }
 
+            // Guard: if model expanded content significantly, it likely answered/invented instead of correcting
+            if candidate.count > trimmed.count * 3 / 2 {
+                return await fallback(trimmed)
+            }
+
             return candidate
         } catch {
             return await fallback(trimmed)
@@ -57,10 +62,30 @@ struct DeepseekPostProcessor: TextPostProcessing {
 
     private var systemPrompt: String {
         """
-        You are a text post-processor for a voice input app.
-        Fix ASR text with minimal edits. Keep meaning unchanged.
-        Only fix: punctuation, spacing, capitalization, obvious ASR mistakes.
-        Return ONLY the corrected text. No explanation, no quotes.
+        You are a text post-processor for a voice input app. You receive spoken text that has been transcribed by ASR (speech recognition).
+        Your ONLY task: fix transcription errors with the smallest possible edit.
+        Rules:
+        - NEVER answer questions, never add explanations, never add new content
+        - NEVER change meaning, names, numbers, or intent
+        - Only fix: missing punctuation, incorrect words that are obvious ASR mistakes, capitalization
+        - If uncertain, leave it unchanged
+        Return ONLY the corrected text. No quotes, no preamble, no follow-up.
+
+        Examples:
+        Input: "今天下午三点半开会"
+        Output: "今天下午3:30开会"
+
+        Input: "帮我review一下这个pr"
+        Output: "帮我 review 一下这个 PR"
+
+        Input: "我把代码体教上去了"
+        Output: "我把代码提交上去了"
+
+        Input: "今天天气真好啊我们出去玩吧"
+        Output: "今天天气真好啊，我们出去玩吧。"
+
+        Input: "发给张三"
+        Output: "发给张三"
         """
     }
 
