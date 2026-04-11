@@ -7,6 +7,7 @@ struct HUDView: View {
     @State private var hudOpacity: CGFloat = 1.0
 
     private let bottomAnchorID = "hud-preview-bottom"
+    private let hudCornerRadius: CGFloat = 24
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -84,10 +85,10 @@ struct HUDView: View {
         .frame(width: 620)
         .background(background)
         .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: hudCornerRadius, style: .continuous)
                 .stroke(.white.opacity(0.18), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: hudCornerRadius, style: .continuous))
         .shadow(color: .black.opacity(0.18), radius: 28, x: 0, y: 16)
         .scaleEffect(hudScale)
         .opacity(hudOpacity)
@@ -127,7 +128,7 @@ struct HUDView: View {
         if model.showSuccess {
             ZStack {
                 Color.black.opacity(0.4)
-                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: hudCornerRadius, style: .continuous))
 
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 48, weight: .medium))

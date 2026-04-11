@@ -3,12 +3,18 @@ import SwiftUI
 
 @MainActor
 final class HUDWindowController {
+    private let cornerRadius: CGFloat = 24
     private let panel: FloatingPanel
     private var isVisible = false
 
     init(model: SoundFlowModel) {
         let rootView = HUDView(model: model)
         let hostingView = NSHostingView(rootView: rootView)
+        hostingView.wantsLayer = true
+        hostingView.layer?.cornerRadius = cornerRadius
+        hostingView.layer?.cornerCurve = .continuous
+        hostingView.layer?.masksToBounds = true
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
 
         panel = FloatingPanel(
             contentRect: NSRect(x: 0, y: 0, width: 620, height: 188),
@@ -20,6 +26,11 @@ final class HUDWindowController {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
+        panel.contentView?.wantsLayer = true
+        panel.contentView?.layer?.cornerRadius = cornerRadius
+        panel.contentView?.layer?.cornerCurve = .continuous
+        panel.contentView?.layer?.masksToBounds = true
+        panel.contentView?.layer?.backgroundColor = NSColor.clear.cgColor
         panel.level = .statusBar
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
         panel.hidesOnDeactivate = false
