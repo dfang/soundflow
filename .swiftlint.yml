@@ -1,0 +1,54 @@
+included:
+  - Sources
+  - App
+
+excluded:
+  - Carthage
+  - Pods
+  - .build
+
+line_length:
+  warning: 120
+  error: 160
+
+type_name:
+  max_length: 50
+
+identifier_name:
+  min_length: 2
+  excluded:
+    - id
+    - x
+    - y
+
+# 禁止 force unwrap（生产建议开）
+force_unwrap:
+  severity: warning
+
+# 函数长度
+function_body_length:
+  warning: 50
+  error: 100
+
+# 文件长度
+file_length:
+  warning: 400
+  error: 800
+
+# SwiftUI 常见：允许 closure 参数简写
+closure_parameter_position:
+  severity: warning
+
+# MARK 规范
+mark:
+  severity: warning
+
+# 多余 import
+unused_import:
+  severity: warning
+
+# 可选：自动修复
+opt_in_rules:
+  - empty_count
+  - redundant_nil_coalescing
+  - sorted_imports
