@@ -1,63 +1,65 @@
 import AppKit
-import Carbon
 
 enum TextOutputResult {
-    case pasted
-    case copiedToClipboard
+    case inserted
+    case accessibilityUnavailable
+    case injectionFailed
 }
 
 struct TextOutputService {
     private let permissionManager = PermissionManager()
     private let activationDelay: TimeInterval = 0.28
 
+    @discardableResult
     func output(
         _ text: String,
         targetApplication: NSRunningApplication?,
         promptForAccessibility: Bool
     ) -> TextOutputResult {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-
         guard permissionManager.hasAccessibilityPermission(prompt: promptForAccessibility) else {
-            return .copiedToClipboard
+            return .accessibilityUnavailable
         }
 
-        if let targetApplication, targetApplication != .current {
-            targetApplication.unhide()
-            let didActivate = targetApplication.activate(options: [.activateAllWindows])
+        bringTargetToFront(targetApplication)
+        usleep(UInt32(activationDelay * 1_000_000))
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + activationDelay) {
-                let frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-                let targetBundleID = targetApplication.bundleIdentifier
-
-                if !didActivate || frontmostBundleID != targetBundleID {
-                    targetApplication.unhide()
-                    _ = targetApplication.activate(options: [.activateAllWindows])
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                        simulatePaste()
-                    }
-                    return
-                }
-
-                simulatePaste()
-            }
-        } else {
-            simulatePaste()
+        if let targetApplication,
+           targetApplication != .current,
+           NSWorkspace.shared.frontmostApplication?.bundleIdentifier != targetApplication.bundleIdentifier {
+            return .injectionFailed
         }
 
-        return .pasted
+        return injectTextWithKeyboardEvents(text) ? .inserted : .injectionFailed
     }
 
-    private func simulatePaste() {
-        guard let source = CGEventSource(stateID: .hidSystemState) else { return }
+    private func bringTargetToFront(_ targetApplication: NSRunningApplication?) {
+        guard let targetApplication, targetApplication != .current else { return }
+        targetApplication.unhide()
+        _ = targetApplication.activate(options: [.activateAllWindows])
+    }
 
-        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: true)
-        keyDown?.flags = .maskCommand
-        keyDown?.post(tap: .cghidEventTap)
+    private func injectTextWithKeyboardEvents(_ text: String) -> Bool {
+        guard let source = CGEventSource(stateID: .hidSystemState) else {
+            return false
+        }
 
-        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: false)
-        keyUp?.flags = .maskCommand
-        keyUp?.post(tap: .cghidEventTap)
+        let scalars = Array(text.utf16)
+        guard !scalars.isEmpty else {
+            return true
+        }
+
+        guard
+            let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+        else {
+            return false
+        }
+
+        keyDown.keyboardSetUnicodeString(stringLength: scalars.count, unicodeString: scalars)
+        keyUp.keyboardSetUnicodeString(stringLength: scalars.count, unicodeString: scalars)
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+
+        return true
     }
 }

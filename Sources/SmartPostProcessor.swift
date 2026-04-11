@@ -12,6 +12,59 @@ struct SmartPostProcessor: TextPostProcessing {
         self.wrapped = wrapped
     }
 
+    func processStream(rawText: String) -> AsyncThrowingStream<String, Error> {
+        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return AsyncThrowingStream { continuation in
+                continuation.yield("")
+                continuation.finish()
+            }
+        }
+
+        let decision = evaluate(trimmed)
+        guard decision.shouldProcess else {
+            PostProcessingTelemetry.record(.skipped, reason: decision.reason)
+            return AsyncThrowingStream { continuation in
+                continuation.yield(trimmed)
+                continuation.finish()
+            }
+        }
+
+        return AsyncThrowingStream { continuation in
+            Task {
+                let stream = wrapped.processStream(rawText: trimmed)
+                var candidate = ""
+                var didFallbackOnError = false
+
+                do {
+                    for try await token in stream {
+                        candidate += token
+                    }
+                } catch {
+                    candidate = trimmed
+                    didFallbackOnError = true
+                }
+
+                candidate = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                if didFallbackOnError || candidate.isEmpty || looksLikeExpansion(original: trimmed, candidate: candidate) {
+                    let reason: String
+                    if didFallbackOnError {
+                        reason = "wrapped processor stream failed"
+                    } else {
+                        reason = candidate.isEmpty ? "empty result" : "expanded text"
+                    }
+                    PostProcessingTelemetry.record(.fallback, reason: reason)
+                    continuation.yield(trimmed)
+                } else {
+                    PostProcessingTelemetry.record(.triggered, reason: decision.reason)
+                    continuation.yield(candidate)
+                }
+                continuation.finish()
+            }
+        }
+    }
+
     func process(_ text: String) async -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return trimmed }
