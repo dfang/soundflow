@@ -15,57 +15,68 @@ struct SmartPostProcessor: TextPostProcessing {
     func process(_ text: String) async -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return trimmed }
-        guard shouldPostProcess(trimmed) else { return trimmed }
+        let decision = evaluate(trimmed)
+        guard decision.shouldProcess else {
+            PostProcessingTelemetry.record(.skipped, reason: decision.reason)
+            return trimmed
+        }
 
         let candidate = await wrapped.process(trimmed).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !candidate.isEmpty else { return trimmed }
-        guard !looksLikeExpansion(original: trimmed, candidate: candidate) else { return trimmed }
+        guard !candidate.isEmpty else {
+            PostProcessingTelemetry.record(.fallback, reason: "wrapped processor returned empty text")
+            return trimmed
+        }
+        guard !looksLikeExpansion(original: trimmed, candidate: candidate) else {
+            PostProcessingTelemetry.record(.fallback, reason: "wrapped processor expanded text too much")
+            return trimmed
+        }
 
+        PostProcessingTelemetry.record(.triggered, reason: decision.reason)
         return candidate
     }
 
-    private func shouldPostProcess(_ text: String) -> Bool {
+    private func evaluate(_ text: String) -> (shouldProcess: Bool, reason: String) {
         if text.count <= 6 {
-            return false
+            return (false, "short text")
         }
 
         if hasFillerWord(in: text) {
-            return true
+            return (true, "contains filler words")
         }
 
         if hasRepeatedToken(in: text) {
-            return true
+            return (true, "contains repeated tokens")
         }
 
         if hasExcessWhitespace(in: text) {
-            return true
+            return (true, "contains excess whitespace")
         }
 
         if hasRepeatedPunctuation(in: text) {
-            return true
+            return (true, "contains repeated punctuation")
         }
 
         if hasAbnormalSymbols(in: text) {
-            return true
+            return (true, "contains abnormal symbols")
         }
 
         if hasMixedScriptSpacingIssue(in: text) && isLongRunWithoutPunctuation(text) {
-            return true
+            return (true, "mixed script spacing issue in long unpunctuated text")
         }
 
         if isLongRunWithoutPunctuation(text) {
-            return true
+            return (true, "long run without punctuation")
         }
 
         if hasTerminalPunctuation(text) {
-            return false
+            return (false, "already has terminal punctuation")
         }
 
         if text.count <= 12 {
-            return false
+            return (false, "short clean text")
         }
 
-        return false
+        return (false, "no strong cleanup signal")
     }
 
     private func hasFillerWord(in text: String) -> Bool {

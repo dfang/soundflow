@@ -19,6 +19,7 @@ final class SoundFlowModel: ObservableObject {
     @Published private(set) var asrModelName: String
     @Published private(set) var asrModelSource: String
     @Published private(set) var postProcessorModelName: String
+    @Published private(set) var postProcessingStatus = "Idle"
 
     private let permissionManager = PermissionManager()
     private let audioCaptureService = AudioCaptureService()
@@ -33,6 +34,7 @@ final class SoundFlowModel: ObservableObject {
     private var didBootstrap = false
     private var targetApplication: NSRunningApplication?
     private var pendingCommitWorkItem: DispatchWorkItem?
+    private var postProcessingObserver: Any?
 
     private init(runtime: AppRuntime) {
         self.runtime = runtime
@@ -54,6 +56,18 @@ final class SoundFlowModel: ObservableObject {
 
         transcriptionService.onPreview = { [weak self] text in
             self?.previewText = text
+        }
+
+        postProcessingObserver = NotificationCenter.default.addObserver(
+            forName: .postProcessingDecisionDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let decision = notification.userInfo?["decision"] as? String ?? "Unknown"
+            let reason = notification.userInfo?["reason"] as? String ?? "n/a"
+            Task { @MainActor [weak self] in
+                self?.postProcessingStatus = "\(decision): \(reason)"
+            }
         }
     }
 
@@ -187,6 +201,7 @@ final class SoundFlowModel: ObservableObject {
         targetApplication = nil
         hideHUD()
         previewText = "Press Right Control to start speaking."
+        postProcessingStatus = "Idle"
     }
 
     private func beginRecording() async {
@@ -219,6 +234,7 @@ final class SoundFlowModel: ObservableObject {
 
         previewText = "Listening..."
         audioLevel = 0
+        postProcessingStatus = "Idle"
         setPhase(.recording)
         showHUD()
     }
@@ -228,6 +244,7 @@ final class SoundFlowModel: ObservableObject {
         cancelPendingCommit()
 
         setPhase(.processing)
+        postProcessingStatus = "Processing..."
         audioCaptureService.stop()
 
         Task {
@@ -273,6 +290,7 @@ final class SoundFlowModel: ObservableObject {
                 self.showSuccess = false
                 self.setPhase(.idle)
                 self.previewText = "Press Right Control to start speaking."
+                self.postProcessingStatus = "Idle"
                 self.errorMessage = nil
                 self.targetApplication = nil
             }
@@ -292,6 +310,7 @@ final class SoundFlowModel: ObservableObject {
         setPhase(.idle)
         showSuccess = false
         previewText = "Cancelled."
+        postProcessingStatus = "Idle"
         audioLevel = 0
         scheduleHUDDismiss(after: 0.2)
     }
@@ -301,6 +320,7 @@ final class SoundFlowModel: ObservableObject {
         errorMessage = message
         showSuccess = false
         previewText = message
+        postProcessingStatus = "Idle"
         setPhase(.error)
         showHUD()
     }
@@ -335,6 +355,7 @@ final class SoundFlowModel: ObservableObject {
             self.hideHUD()
             if self.phase == .idle {
                 self.previewText = "Press Right Control to start speaking."
+                self.postProcessingStatus = "Idle"
                 self.errorMessage = nil
             }
         }

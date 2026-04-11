@@ -55,7 +55,7 @@ struct HUDView: View {
             }
 
             HStack {
-                Text("Enter confirm, Esc cancel")
+                Text(model.phase == .recording ? "Enter confirm, Esc cancel" : model.postProcessingStatus)
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
