@@ -7,6 +7,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case audio
     case hotkey
     case models
+    case dictionary
     case about
 
     var id: String {
@@ -21,6 +22,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .audio: return "Audio Input"
         case .hotkey: return "Hotkeys"
         case .models: return "Model Settings"
+        case .dictionary: return "Dictionary"
         case .about: return "About"
         }
     }
@@ -33,6 +35,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .audio: return "mic.fill"
         case .hotkey: return "keyboard.fill"
         case .models: return "books.vertical.fill"
+        case .dictionary: return "character.book.closed.fill"
         case .about: return "info.circle.fill"
         }
     }
@@ -117,6 +120,7 @@ struct SettingsContainerView: View {
         case .hotkey: HotkeySettingsView().frame(maxWidth: .infinity)
         case .audio: AudioSettingsView().frame(maxWidth: .infinity)
         case .models: ModelsSettingsView().frame(maxWidth: .infinity)
+        case .dictionary: DictionarySettingsView().frame(maxWidth: .infinity)
         case .about: AboutSettingsView().frame(maxWidth: .infinity)
         }
     }

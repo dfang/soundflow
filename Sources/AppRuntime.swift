@@ -71,7 +71,9 @@ enum ServiceFactory {
         case .disabled:
             return base
         default:
-            return SmartPostProcessor(wrapping: base)
+            return DictionaryPostProcessor(
+                wrapping: SmartPostProcessor(wrapping: base)
+            )
         }
     }
 }

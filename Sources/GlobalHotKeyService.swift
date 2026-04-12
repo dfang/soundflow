@@ -32,7 +32,7 @@ final class GlobalHotKeyService {
         UInt16(kVK_Option): .option,
         UInt16(kVK_RightOption): .option,
         UInt16(kVK_Command): .command,
-        UInt16(kVK_RightCommand): .command,
+        UInt16(kVK_RightCommand): .command
     ]
 
     init(keyCode: Int = 17, modifiers: Int = 0) {

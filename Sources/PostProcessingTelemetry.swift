@@ -17,7 +17,7 @@ enum PostProcessingTelemetry {
             object: nil,
             userInfo: [
                 "decision": decision.rawValue,
-                "reason": reason,
+                "reason": reason
             ]
         )
     }

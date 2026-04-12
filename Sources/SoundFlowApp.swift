@@ -28,6 +28,11 @@ struct SoundFlowApp: App {
             Label(model.menuBarTitle, systemImage: model.menuBarSymbol)
         }
         .menuBarExtraStyle(.menu)
+        .onChange(of: model.showWizard) { _, newValue in
+            if newValue {
+                openSetup()
+            }
+        }
     }
 
     private func openSettings() {

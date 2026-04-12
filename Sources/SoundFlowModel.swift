@@ -219,6 +219,10 @@ final class SoundFlowModel: ObservableObject {
         postProcessingStatus = "Idle"
     }
 
+    func dismissWizard() {
+        showWizard = false
+    }
+
     private func beginRecording() async {
         cancelPendingCommit()
         errorMessage = nil

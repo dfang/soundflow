@@ -28,6 +28,9 @@ let package = Package(
             exclude: [
                 "CSherpaOnnx",
             ],
+            resources: [
+                .process("system_dictionary.json"),
+            ],
             linkerSettings: [
                 .linkedLibrary("onnxruntime"),
                 .unsafeFlags([

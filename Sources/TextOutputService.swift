@@ -69,8 +69,7 @@ struct TextOutputService {
 
         guard
             let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
-            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) else
-        {
+            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) else {
             print("[SoundFlow] Injection failed: Could not create CGEvent.")
             return false
         }

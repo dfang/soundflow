@@ -22,6 +22,7 @@ final class AppState: ObservableObject {
     func markWizardCompleted() {
         isFirstLaunch = false
         showWizard = false
+        SoundFlowModel.shared.dismissWizard()
     }
 
     func resetToFirstLaunch() {

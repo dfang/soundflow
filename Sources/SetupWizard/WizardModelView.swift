@@ -116,7 +116,7 @@ struct WizardModelView: View {
         DispatchQueue.global().async {
             let senseVoiceCandidates = [
                 modelsDir.appendingPathComponent("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"),
-                modelsDir.appendingPathComponent("sensevoice-small"),
+                modelsDir.appendingPathComponent("sensevoice-small")
             ]
 
             var found = false
@@ -124,8 +124,7 @@ struct WizardModelView: View {
                 if fileManager.fileExists(atPath: candidate.path) {
                     let modelFiles = try? fileManager.contentsOfDirectory(atPath: candidate.path)
                     if let files = modelFiles,
-                       files.contains(where: { $0.hasSuffix(".onnx") || $0.hasSuffix(".txt") })
-                    {
+                       files.contains(where: { $0.hasSuffix(".onnx") || $0.hasSuffix(".txt") }) {
                         DispatchQueue.main.async {
                             status.senseVoice = .found(candidate.path)
                         }
@@ -145,7 +144,7 @@ struct WizardModelView: View {
         DispatchQueue.global().async {
             let vadCandidates = [
                 modelsDir.appendingPathComponent("silero_vad.onnx"),
-                home.appendingPathComponent("Library/Application Support/Shandianshuo/models/silero_vad.onnx"),
+                home.appendingPathComponent("Library/Application Support/Shandianshuo/models/silero_vad.onnx")
             ]
 
             var found = false

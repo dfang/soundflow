@@ -84,7 +84,7 @@ struct ModelsSettingsView: View {
         senseVoiceStatus = .checking
         let senseVoiceCandidates = [
             modelsDir.appendingPathComponent("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"),
-            modelsDir.appendingPathComponent("sensevoice-small"),
+            modelsDir.appendingPathComponent("sensevoice-small")
         ]
 
         var found = false
@@ -108,7 +108,7 @@ struct ModelsSettingsView: View {
         vadStatus = .checking
         let vadCandidates = [
             modelsDir.appendingPathComponent("silero_vad.onnx"),
-            home.appendingPathComponent("Library/Application Support/Shandianshuo/models/silero_vad.onnx"),
+            home.appendingPathComponent("Library/Application Support/Shandianshuo/models/silero_vad.onnx")
         ]
 
         found = false
