@@ -452,7 +452,7 @@ final class SoundFlowModel: ObservableObject {
                 cancelRecording()
                 return nil
             case Int(kVK_Return), Int(kVK_ANSI_KeypadEnter),
-                Int(kVK_Control), Int(kVK_RightControl):
+                 Int(kVK_Control), Int(kVK_RightControl):
                 if phase == .recording {
                     requestCommitWithFeedback()
                     return nil

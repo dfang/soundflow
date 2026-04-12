@@ -22,7 +22,7 @@ identifier_name:
     - y
 
 # 禁止 force unwrap（生产建议开）
-force_unwrap:
+force_unwrapping:
   severity: warning
 
 # 函数长度
@@ -43,12 +43,13 @@ closure_parameter_position:
 mark:
   severity: warning
 
-# 多余 import
-unused_import:
-  severity: warning
+# 多余 import (analyzer rule)
+analyzer_rules:
+  - unused_import
 
 # 可选：自动修复
 opt_in_rules:
   - empty_count
   - redundant_nil_coalescing
   - sorted_imports
+  - force_unwrapping
