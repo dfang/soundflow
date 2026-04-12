@@ -14,50 +14,88 @@ struct DeepseekPostProcessor: TextPostProcessing {
     func process(_ text: String) async -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return trimmed }
-        guard !apiKey.isEmpty else {
-            return await fallback(trimmed)
-        }
 
+        var result = ""
         do {
-            let requestBody = DeepseekRequest(
-                model: modelName,
-                messages: [
-                    ChatMessage(role: "system", content: systemPrompt),
-                    ChatMessage(role: "user", content: trimmed)
-                ],
-                temperature: 0.0,
-                maxTokens: 96
-            )
-
-            var request = URLRequest(url: endpoint)
-            request.httpMethod = "POST"
-            request.timeoutInterval = 20
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-            request.httpBody = try JSONEncoder().encode(requestBody)
-
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse,
-                  (200 ..< 300).contains(httpResponse.statusCode)
-            else {
-                return await fallback(trimmed)
+            for try await token in processStream(rawText: trimmed) {
+                result += token
             }
-
-            let payload = try JSONDecoder().decode(DeepseekResponse.self, from: data)
-            let candidate = payload.choices.first?.message.content
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard !candidate.isEmpty else {
-                return await fallback(trimmed)
-            }
-
-            // Guard: if model expanded content significantly, it likely answered/invented instead of correcting
-            if candidate.count > trimmed.count * 3 / 2 {
-                return await fallback(trimmed)
-            }
-
-            return candidate
+            return result.trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {
             return await fallback(trimmed)
+        }
+    }
+
+    func processStream(rawText: String) -> AsyncThrowingStream<String, Error> {
+        return AsyncThrowingStream { continuation in
+            let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                continuation.finish()
+                return
+            }
+            guard !apiKey.isEmpty else {
+                Task {
+                    continuation.yield(await fallback(trimmed))
+                    continuation.finish()
+                }
+                return
+            }
+
+            Task {
+                do {
+                    let requestBody = DeepseekRequest(
+                        model: modelName,
+                        messages: [
+                            ChatMessage(role: "system", content: systemPrompt),
+                            ChatMessage(role: "user", content: trimmed)
+                        ],
+                        temperature: 0.0,
+                        maxTokens: 96,
+                        stream: true
+                    )
+
+                    var request = URLRequest(url: endpoint)
+                    request.httpMethod = "POST"
+                    request.timeoutInterval = 20
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+                    request.httpBody = try JSONEncoder().encode(requestBody)
+
+                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
+                    guard let httpResponse = response as? HTTPURLResponse,
+                          (200..<300).contains(httpResponse.statusCode) else {
+                        continuation.yield(await fallback(trimmed))
+                        continuation.finish()
+                        return
+                    }
+
+                    var emittedToken = false
+                    for try await line in bytes.lines {
+                        guard line.hasPrefix("data: ") else { continue }
+
+                        let dataLine = String(line.dropFirst(6))
+                        if dataLine == "[DONE]" { break }
+
+                        guard let data = dataLine.data(using: .utf8),
+                              let chunk = try? JSONDecoder().decode(DeepseekStreamResponse.self, from: data),
+                              let content = chunk.choices.first?.delta.content,
+                              !content.isEmpty else {
+                            continue
+                        }
+
+                        emittedToken = true
+                        continuation.yield(content)
+                    }
+
+                    if !emittedToken {
+                        continuation.yield(await fallback(trimmed))
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.yield(await fallback(trimmed))
+                    continuation.finish()
+                }
+            }
         }
     }
 
@@ -100,6 +138,15 @@ private struct DeepseekRequest: Encodable {
     let messages: [ChatMessage]
     let temperature: Double
     let maxTokens: Int
+    let stream: Bool
+}
+
+private struct DeepseekStreamResponse: Decodable {
+    let choices: [DeepseekStreamChoice]
+}
+
+private struct DeepseekStreamChoice: Decodable {
+    let delta: DeepseekDelta
 }
 
 private struct ChatMessage: Encodable {
@@ -116,6 +163,11 @@ private struct DeepseekChoice: Decodable {
 }
 
 private struct ChatMessageContent: Decodable {
-    let role: String
+    let role: String?
     let content: String
+}
+
+private struct DeepseekDelta: Decodable {
+    let role: String?
+    let content: String?
 }

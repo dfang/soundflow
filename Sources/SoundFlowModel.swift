@@ -19,6 +19,7 @@ final class SoundFlowModel: ObservableObject {
     @Published private(set) var asrModelName: String
     @Published private(set) var asrModelSource: String
     @Published private(set) var postProcessorModelName: String
+    @Published private(set) var postProcessingStatus = "Idle"
     @Published var showWizard = false
 
     let appState = AppState.shared
@@ -36,6 +37,7 @@ final class SoundFlowModel: ObservableObject {
     private var didBootstrap = false
     private var targetApplication: NSRunningApplication?
     private var pendingCommitWorkItem: DispatchWorkItem?
+    private var postProcessingObserver: Any?
 
     private init(runtime: AppRuntime) {
         self.runtime = runtime
@@ -59,6 +61,17 @@ final class SoundFlowModel: ObservableObject {
             self?.previewText = text
         }
 
+        postProcessingObserver = NotificationCenter.default.addObserver(
+            forName: .postProcessingDecisionDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let decision = notification.userInfo?["decision"] as? String ?? "Unknown"
+            let reason = notification.userInfo?["reason"] as? String ?? "n/a"
+            Task { @MainActor [weak self] in
+                self?.postProcessingStatus = "\(decision): \(reason)"
+            }
+        }
         showWizard = appState.isFirstLaunch
     }
 
@@ -203,6 +216,7 @@ final class SoundFlowModel: ObservableObject {
         targetApplication = nil
         hideHUD()
         previewText = "Press Right Control to start speaking."
+        postProcessingStatus = "Idle"
     }
 
     private func beginRecording() async {
@@ -235,6 +249,7 @@ final class SoundFlowModel: ObservableObject {
 
         previewText = "Listening..."
         audioLevel = 0
+        postProcessingStatus = "Idle"
         setPhase(.recording)
         showHUD()
     }
@@ -244,14 +259,58 @@ final class SoundFlowModel: ObservableObject {
         cancelPendingCommit()
 
         setPhase(.processing)
+        postProcessingStatus = "正在整理文本..."
         audioCaptureService.stop()
 
         Task {
             do {
                 let rawText = try await transcriptionService.stop()
-                let processedText = await postProcessor.process(rawText)
+
                 await MainActor.run {
-                    self.finishCommit(with: processedText)
+                    self.previewText = "AI 正在润色..."
+                    self.postProcessingStatus = "AI 正在润色..."
+                    self.setPhase(.committing)
+                }
+
+                let stream = postProcessor.processStream(rawText: rawText)
+                var optimizedText = ""
+                for try await token in stream {
+                    optimizedText += token
+                    let snapshot = optimizedText
+                    await MainActor.run {
+                        if !snapshot.isEmpty {
+                            self.previewText = snapshot
+                        }
+                    }
+                }
+
+                let finalText = optimizedText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                await MainActor.run {
+                    guard !finalText.isEmpty else {
+                        self.setError("No speech detected.")
+                        self.scheduleHUDDismiss(after: 1.4)
+                        return
+                    }
+
+                    self.hideHUD()
+                    let result = self.textOutputService.output(
+                        finalText,
+                        targetApplication: self.targetApplication,
+                        promptForAccessibility: true
+                    )
+
+                    switch result {
+                    case .inserted:
+                        self.finishCommitStatusOnly(with: finalText, keepHUDHidden: true)
+                    case .accessibilityUnavailable:
+                        self.setError("Accessibility permission is required before inserting text.")
+                        self.scheduleHUDDismiss(after: 2.0)
+                    case .injectionFailed:
+                        self.showHUD()
+                        self.setError("Direct text injection failed for the focused field.")
+                        self.scheduleHUDDismiss(after: 2.0)
+                    }
                 }
             } catch {
                 await MainActor.run {
@@ -259,6 +318,27 @@ final class SoundFlowModel: ObservableObject {
                     self.scheduleHUDDismiss(after: 2.0)
                 }
             }
+        }
+    }
+
+    private func finishCommitStatusOnly(with text: String, keepHUDHidden: Bool = false) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        setPhase(.committing)
+        lastCommittedText = trimmed
+        previewText = trimmed
+        showSuccess = true
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            guard let self else { return }
+            if !keepHUDHidden {
+                self.hideHUD()
+            }
+            self.showSuccess = false
+            self.setPhase(.idle)
+            self.previewText = "Press Right Control to start speaking."
+            self.postProcessingStatus = "Idle"
+            self.errorMessage = nil
+            self.targetApplication = nil
         }
     }
 
@@ -274,27 +354,17 @@ final class SoundFlowModel: ObservableObject {
         lastCommittedText = trimmed
         previewText = trimmed
 
-        let result = textOutputService.output(
-            trimmed,
-            targetApplication: targetApplication,
-            promptForAccessibility: true
-        )
-
-        switch result {
-        case .pasted:
-            showSuccess = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                guard let self else { return }
-                self.hideHUD()
-                self.showSuccess = false
-                self.setPhase(.idle)
-                self.previewText = "Press Right Control to start speaking."
-                self.errorMessage = nil
-                self.targetApplication = nil
-            }
-        case .copiedToClipboard:
-            setError("Copied to clipboard. Grant Accessibility permission to auto-paste.")
-            scheduleHUDDismiss(after: 2.0)
+        // Only handle success HUD state, paste logic now handled in commitRecording
+        showSuccess = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            guard let self else { return }
+            self.hideHUD()
+            self.showSuccess = false
+            self.setPhase(.idle)
+            self.previewText = "Press Right Control to start speaking."
+            self.postProcessingStatus = "Idle"
+            self.errorMessage = nil
+            self.targetApplication = nil
         }
     }
 
@@ -308,6 +378,7 @@ final class SoundFlowModel: ObservableObject {
         setPhase(.idle)
         showSuccess = false
         previewText = "Cancelled."
+        postProcessingStatus = "Idle"
         audioLevel = 0
         scheduleHUDDismiss(after: 0.2)
     }
@@ -317,6 +388,7 @@ final class SoundFlowModel: ObservableObject {
         errorMessage = message
         showSuccess = false
         previewText = message
+        postProcessingStatus = "Idle"
         setPhase(.error)
         showHUD()
     }
@@ -351,24 +423,15 @@ final class SoundFlowModel: ObservableObject {
             self.hideHUD()
             if self.phase == .idle {
                 self.previewText = "Press Right Control to start speaking."
+                self.postProcessingStatus = "Idle"
                 self.errorMessage = nil
             }
         }
     }
 
     private func requestCommitWithFeedback() {
-        guard phase == .recording, pendingCommitWorkItem == nil else { return }
-
-        commitFeedbackToken += 1
-
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            self.pendingCommitWorkItem = nil
-            self.commitRecording()
-        }
-
-        pendingCommitWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
+        guard phase == .recording else { return }
+        self.commitRecording()
     }
 
     private func cancelPendingCommit() {

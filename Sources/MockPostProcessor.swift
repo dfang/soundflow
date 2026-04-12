@@ -4,6 +4,16 @@ struct MockPostProcessor: TextPostProcessing {
     let displayName = PostProcessorBackend.mockGemma.rawValue
     let model: ModelDescriptor
 
+    func processStream(rawText: String) -> AsyncThrowingStream<String, Error> {
+        return AsyncThrowingStream { continuation in
+            Task {
+                let result = await process(rawText)
+                continuation.yield(result)
+                continuation.finish()
+            }
+        }
+    }
+
     func process(_ text: String) async -> String {
         var output = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !output.isEmpty else { return "你好，SoundFlow。" }

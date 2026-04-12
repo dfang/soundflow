@@ -54,17 +54,26 @@ enum ServiceFactory {
     }
 
     static func makePostProcessor(for configuration: RuntimeConfiguration) -> any TextPostProcessing {
+        let base: any TextPostProcessing
+
         switch configuration.postProcessorBackend {
         case .disabled:
-            return PassthroughPostProcessor(model: configuration.selectedPostProcessorModel)
+            base = PassthroughPostProcessor(model: configuration.selectedPostProcessorModel)
         case .mockGemma:
-            return MockPostProcessor(model: configuration.selectedPostProcessorModel)
+            base = MockPostProcessor(model: configuration.selectedPostProcessorModel)
         case .ollamaGemma:
-            return OllamaGemmaPostProcessor(model: configuration.selectedPostProcessorModel)
+            base = OllamaGemmaPostProcessor(model: configuration.selectedPostProcessorModel)
         case .mlxGemma:
-            return PlaceholderGemmaPostProcessor(model: configuration.selectedPostProcessorModel)
+            base = PlaceholderGemmaPostProcessor(model: configuration.selectedPostProcessorModel)
         case .deepseek:
-            return DeepseekPostProcessor(model: configuration.selectedPostProcessorModel)
+            base = DeepseekPostProcessor(model: configuration.selectedPostProcessorModel)
+        }
+
+        switch configuration.postProcessorBackend {
+        case .disabled:
+            return base
+        default:
+            return SmartPostProcessor(wrapping: base)
         }
     }
 }

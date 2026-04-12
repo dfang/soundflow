@@ -7,6 +7,16 @@ struct OllamaGemmaPostProcessor: TextPostProcessing {
     private let endpoint = URL(string: "http://127.0.0.1:11434/api/generate")!
     private let ollamaModelName = "gemma4:e4b"
 
+    func processStream(rawText: String) -> AsyncThrowingStream<String, Error> {
+        return AsyncThrowingStream { continuation in
+            Task {
+                let result = await process(rawText)
+                continuation.yield(result)
+                continuation.finish()
+            }
+        }
+    }
+
     func process(_ text: String) async -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return trimmed }

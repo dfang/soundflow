@@ -1,63 +1,83 @@
 import AppKit
-import Carbon
 
 enum TextOutputResult {
-    case pasted
-    case copiedToClipboard
+    case inserted
+    case accessibilityUnavailable
+    case injectionFailed
 }
 
 struct TextOutputService {
     private let permissionManager = PermissionManager()
-    private let activationDelay: TimeInterval = 0.28
+    private let activationRetryDelay: TimeInterval = 0.06
+    private let activationRetryCount = 4
 
+    @discardableResult
     func output(
         _ text: String,
         targetApplication: NSRunningApplication?,
         promptForAccessibility: Bool
     ) -> TextOutputResult {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-
         guard permissionManager.hasAccessibilityPermission(prompt: promptForAccessibility) else {
-            return .copiedToClipboard
+            return .accessibilityUnavailable
         }
 
-        if let targetApplication, targetApplication != .current {
-            targetApplication.unhide()
-            let didActivate = targetApplication.activate(options: [.activateAllWindows])
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + activationDelay) {
-                let frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-                let targetBundleID = targetApplication.bundleIdentifier
-
-                if !didActivate || frontmostBundleID != targetBundleID {
-                    targetApplication.unhide()
-                    _ = targetApplication.activate(options: [.activateAllWindows])
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                        simulatePaste()
-                    }
-                    return
-                }
-
-                simulatePaste()
-            }
-        } else {
-            simulatePaste()
+        if !activateTargetApplication(targetApplication) {
+            return .injectionFailed
         }
 
-        return .pasted
+        return injectTextWithKeyboardEvents(text, targetApplication: targetApplication) ? .inserted : .injectionFailed
     }
 
-    private func simulatePaste() {
-        guard let source = CGEventSource(stateID: .hidSystemState) else { return }
+    private func activateTargetApplication(_ targetApplication: NSRunningApplication?) -> Bool {
+        guard let targetApplication, targetApplication != .current else { return true }
 
-        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: true)
-        keyDown?.flags = .maskCommand
-        keyDown?.post(tap: .cghidEventTap)
+        let targetBundleID = targetApplication.bundleIdentifier
 
-        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: false)
-        keyUp?.flags = .maskCommand
-        keyUp?.post(tap: .cghidEventTap)
+        for attempt in 0..<activationRetryCount {
+            targetApplication.unhide()
+            _ = targetApplication.activate(options: [.activateAllWindows])
+
+            let frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            if frontmostBundleID == targetBundleID {
+                return true
+            }
+
+            if attempt < activationRetryCount - 1 {
+                usleep(UInt32(activationRetryDelay * 1_000_000))
+            }
+        }
+
+        return false
+    }
+
+    private func injectTextWithKeyboardEvents(_ text: String, targetApplication: NSRunningApplication?) -> Bool {
+        // 1. 注入前最终焦点确认
+        if let target = targetApplication, NSWorkspace.shared.frontmostApplication != target {
+            print("[SoundFlow] Injection aborted: Target app \(target.bundleIdentifier ?? "unknown") is no longer frontmost.")
+            return false
+        }
+
+        guard let source = CGEventSource(stateID: .hidSystemState) else {
+            print("[SoundFlow] Injection failed: Could not create CGEventSource.")
+            return false
+        }
+
+        let scalars = Array(text.utf16)
+        guard !scalars.isEmpty else { return true }
+
+        guard
+            let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+        else {
+            print("[SoundFlow] Injection failed: Could not create CGEvent.")
+            return false
+        }
+
+        keyDown.keyboardSetUnicodeString(stringLength: scalars.count, unicodeString: scalars)
+        keyUp.keyboardSetUnicodeString(stringLength: scalars.count, unicodeString: scalars)
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+
+        return true
     }
 }
