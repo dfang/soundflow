@@ -60,16 +60,13 @@ final class HUDWindowController {
         guard isVisible else { return }
         isVisible = false
 
-        NSAnimationContext.runAnimationGroup(
-            { context in
-                context.duration = 0.12
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                panel.animator().alphaValue = 0
-            },
-            completionHandler: { [panel] in
-                panel.orderOut(nil)
-            }
-        )
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.12
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            panel.animator().alphaValue = 0
+        } completionHandler: { [panel] in
+            panel.orderOut(nil)
+        }
     }
 
     private func positionPanel() {
@@ -88,6 +85,11 @@ final class HUDWindowController {
 }
 
 private final class FloatingPanel: NSPanel {
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { false }
+    override var canBecomeKey: Bool {
+        true
+    }
+
+    override var canBecomeMain: Bool {
+        false
+    }
 }

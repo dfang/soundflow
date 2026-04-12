@@ -8,7 +8,7 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
     private let lock = NSLock()
     private let decodeQueue = DispatchQueue(label: "app.soundflow.asr.decode")
     private var bufferedSamples: [Float] = []
-    private var sampleRate = 16_000
+    private var sampleRate = 16000
     private var sessionID: UInt64 = 0
     private var latestPreviewText = ""
     private var lastPreviewSampleCount = 0
@@ -36,7 +36,7 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
         lock.lock()
         sessionID &+= 1
         bufferedSamples.removeAll(keepingCapacity: true)
-        sampleRate = 16_000
+        sampleRate = 16000
         latestPreviewText = ""
         lastPreviewSampleCount = 0
         lastQueuedPreviewSampleCount = 0
@@ -75,7 +75,7 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
 
         let enoughAudio = bufferedSamples.count >= minimumPreviewSamples
         let enoughDelta = bufferedSamples.count - lastPreviewSampleCount >= previewStrideSamples
-        if enoughAudio && enoughDelta && !previewDecodeInFlight {
+        if enoughAudio, enoughDelta, !previewDecodeInFlight {
             previewDecodeInFlight = true
             snapshot = bufferedSamples
             snapshotRate = self.sampleRate
@@ -124,7 +124,7 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
         lock.lock()
         sessionID &+= 1
         bufferedSamples.removeAll(keepingCapacity: false)
-        sampleRate = 16_000
+        sampleRate = 16000
         latestPreviewText = ""
         lastPreviewSampleCount = 0
         lastQueuedPreviewSampleCount = 0
@@ -152,7 +152,7 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
             tokens: modelPaths.tokens.path,
             senseVoice: senseVoiceConfig
         )
-        let featureConfig = sherpaOnnxFeatureConfig(sampleRate: 16_000, featureDim: 80)
+        let featureConfig = sherpaOnnxFeatureConfig(sampleRate: 16000, featureDim: 80)
         var config = sherpaOnnxOfflineRecognizerConfig(
             featConfig: featureConfig,
             modelConfig: modelConfig
@@ -188,7 +188,7 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
         )
         var config = sherpaOnnxVadModelConfig(
             sileroVad: sileroConfig,
-            sampleRate: 16_000,
+            sampleRate: 16000,
             numThreads: 1,
             provider: "cpu",
             debug: 0
@@ -241,7 +241,7 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
         lock.lock()
         sessionID &+= 1
         bufferedSamples.removeAll(keepingCapacity: false)
-        sampleRate = 16_000
+        sampleRate = 16000
         latestPreviewText = ""
         lastPreviewSampleCount = 0
         lastQueuedPreviewSampleCount = 0

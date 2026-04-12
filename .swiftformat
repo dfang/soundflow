@@ -1,0 +1,44 @@
+# 缩进
+--indent 4
+--tabwidth 4
+
+# 行宽
+--maxwidth 120
+
+# import 排序
+--importgrouping testable-last
+--sortedimports enabled
+
+# closure 风格
+--closurevoid return
+--trailingclosures enabled
+
+# 空格 & 换行
+--allman false
+--wraparguments before-first
+--wrapcollections before-first
+
+# if / guard 风格
+--guardelse same-line
+
+# self 使用
+--self insert
+
+# 可选链
+--optionalbinding remove
+
+# enum case
+--redundanttype inferred
+
+# trailing comma（SwiftUI 很舒服）
+--commas always
+
+# MARK:
+--marktypes always
+
+# header 忽略
+--header ignore
+
+# 禁用一些容易争议的规则
+--disable redundantReturn
+--disable redundantInit

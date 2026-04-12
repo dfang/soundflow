@@ -1,5 +1,5 @@
-import AVFoundation
 import ApplicationServices
+import AVFoundation
 
 final class PermissionManager {
     func requestMicrophonePermission() async -> Bool {
