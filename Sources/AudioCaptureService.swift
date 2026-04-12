@@ -136,8 +136,8 @@ final class AudioCaptureService {
 
         guard frameLength > 0,
               channelCount > 0,
-              let channelData = buffer.floatChannelData
-        else {
+              let channelData = buffer.floatChannelData else
+        {
             return []
         }
 

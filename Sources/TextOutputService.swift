@@ -33,7 +33,7 @@ struct TextOutputService {
 
         let targetBundleID = targetApplication.bundleIdentifier
 
-        for attempt in 0..<activationRetryCount {
+        for attempt in 0 ..< activationRetryCount {
             targetApplication.unhide()
             _ = targetApplication.activate(options: [.activateAllWindows])
 
@@ -53,7 +53,9 @@ struct TextOutputService {
     private func injectTextWithKeyboardEvents(_ text: String, targetApplication: NSRunningApplication?) -> Bool {
         // 1. 注入前最终焦点确认
         if let target = targetApplication, NSWorkspace.shared.frontmostApplication != target {
-            print("[SoundFlow] Injection aborted: Target app \(target.bundleIdentifier ?? "unknown") is no longer frontmost.")
+            print(
+                "[SoundFlow] Injection aborted: Target app \(target.bundleIdentifier ?? "unknown") is no longer frontmost."
+            )
             return false
         }
 
@@ -67,8 +69,8 @@ struct TextOutputService {
 
         guard
             let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
-            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
-        else {
+            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) else
+        {
             print("[SoundFlow] Injection failed: Could not create CGEvent.")
             return false
         }

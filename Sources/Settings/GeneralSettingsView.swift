@@ -3,7 +3,7 @@ import SwiftUI
 
 struct GeneralSettingsView: View {
     @StateObject private var appState = AppState.shared
-    @State private var launchAtLogin: Bool = false
+    @State private var launchAtLogin = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {

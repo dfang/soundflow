@@ -67,7 +67,6 @@ struct StatusMenuView: View {
             Button("检查更新") {
                 showUpdateAlert()
             }
-
         }
         .padding(.vertical, 4)
         .frame(width: 240)
@@ -89,5 +88,5 @@ struct StatusMenuView: View {
         alert.alertStyle = .informational
         alert.addButton(withTitle: "确定")
         alert.runModal()
-      }
+    }
 }

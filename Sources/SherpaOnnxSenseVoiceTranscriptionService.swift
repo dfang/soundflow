@@ -18,9 +18,9 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
     private var recognizer: SherpaOnnxOfflineRecognizerWrapper?
     private var vad: SherpaOnnxVoiceActivityDetectorWrapper?
 
-    private let minimumPreviewSamples = 3_200
-    private let previewStrideSamples = 1_600
-    private let previewReuseSlackSamples = 8_000
+    private let minimumPreviewSamples = 3200
+    private let previewStrideSamples = 1600
+    private let previewReuseSlackSamples = 8000
     private let previewCoverageThreshold = 0.80
     private let previewReuseWaitMillis = 160
     private let previewReusePollMillis = 20
@@ -59,7 +59,7 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
         lock.lock()
         self.sampleRate = sampleRate
         bufferedSamples.append(contentsOf: samples)
-        let vad = self.vad
+        let vad = vad
         vad?.acceptWaveform(samples: samples)
 
         if !speechDetected {
@@ -258,22 +258,22 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
 
             let previewText: String
             do {
-                let text = try self.decodeSynchronously(samples: samples, sampleRate: sampleRate)
+                let text = try decodeSynchronously(samples: samples, sampleRate: sampleRate)
                 previewText = Self.normalize(text)
             } catch {
                 previewText = ""
             }
 
-            self.lock.lock()
+            lock.lock()
             defer { self.lock.unlock() }
 
             guard self.sessionID == sessionID else { return }
 
-            self.previewDecodeInFlight = false
-            self.lastPreviewSampleCount = max(self.lastPreviewSampleCount, samples.count)
+            previewDecodeInFlight = false
+            lastPreviewSampleCount = max(lastPreviewSampleCount, samples.count)
 
-            guard !previewText.isEmpty, previewText != self.latestPreviewText else { return }
-            self.latestPreviewText = previewText
+            guard !previewText.isEmpty, previewText != latestPreviewText else { return }
+            latestPreviewText = previewText
 
             DispatchQueue.main.async { [weak self] in
                 self?.onPreview?(previewText)
@@ -290,7 +290,7 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
                 }
 
                 do {
-                    let text = try self.decodeSynchronously(samples: samples, sampleRate: sampleRate)
+                    let text = try decodeSynchronously(samples: samples, sampleRate: sampleRate)
                     continuation.resume(returning: text)
                 } catch {
                     continuation.resume(throwing: error)

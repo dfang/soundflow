@@ -2,8 +2,8 @@ import SwiftUI
 
 struct HUDPreviewSettingsView: View {
     @StateObject private var appState = AppState.shared
-    @State private var selectedCorner: Int = 0
-    @State private var hudSize: Double = 0.5
+    @State private var selectedCorner = 0
+    @State private var hudSize = 0.5
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -50,9 +50,9 @@ struct HUDPreviewSettingsView: View {
         }
     }
 
-    private func settingSection<Content: View>(
+    private func settingSection(
         title: String,
-        @ViewBuilder content: () -> Content
+        @ViewBuilder content: () -> some View
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title)

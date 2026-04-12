@@ -11,7 +11,7 @@ final class MockTranscriptionService: TranscriptionService {
         " 一下",
         " 这个",
         " github",
-        " pr"
+        " pr",
     ]
 
     private var timer: Timer?

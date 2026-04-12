@@ -7,8 +7,8 @@ struct SmartPostProcessor: TextPostProcessing {
     private let wrapped: any TextPostProcessing
 
     init(wrapping wrapped: any TextPostProcessing) {
-        self.displayName = wrapped.displayName
-        self.model = wrapped.model
+        displayName = wrapped.displayName
+        model = wrapped.model
         self.wrapped = wrapped
     }
 
@@ -47,12 +47,14 @@ struct SmartPostProcessor: TextPostProcessing {
 
                 candidate = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
 
-                if didFallbackOnError || candidate.isEmpty || looksLikeExpansion(original: trimmed, candidate: candidate) {
-                    let reason: String
-                    if didFallbackOnError {
-                        reason = "wrapped processor stream failed"
+                if didFallbackOnError || candidate.isEmpty || looksLikeExpansion(
+                    original: trimmed,
+                    candidate: candidate
+                ) {
+                    let reason: String = if didFallbackOnError {
+                        "wrapped processor stream failed"
                     } else {
-                        reason = candidate.isEmpty ? "empty result" : "expanded text"
+                        candidate.isEmpty ? "empty result" : "expanded text"
                     }
                     PostProcessingTelemetry.record(.fallback, reason: reason)
                     continuation.yield(trimmed)
@@ -113,7 +115,7 @@ struct SmartPostProcessor: TextPostProcessing {
             return (true, "contains abnormal symbols")
         }
 
-        if hasMixedScriptSpacingIssue(in: text) && isLongRunWithoutPunctuation(text) {
+        if hasMixedScriptSpacingIssue(in: text), isLongRunWithoutPunctuation(text) {
             return (true, "mixed script spacing issue in long unpunctuated text")
         }
 
@@ -148,7 +150,7 @@ struct SmartPostProcessor: TextPostProcessing {
 
     private func hasMixedScriptSpacingIssue(in text: String) -> Bool {
         text.range(of: "([\\p{Han}])([A-Za-z0-9])", options: .regularExpression) != nil ||
-        text.range(of: "([A-Za-z0-9])([\\p{Han}])", options: .regularExpression) != nil
+            text.range(of: "([A-Za-z0-9])([\\p{Han}])", options: .regularExpression) != nil
     }
 
     private func hasExcessWhitespace(in text: String) -> Bool {

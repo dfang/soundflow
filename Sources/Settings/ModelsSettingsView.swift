@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct ModelsSettingsView: View {
-    @State private var senseVoicePath: String = ""
-    @State private var vadPath: String = ""
+    @State private var senseVoicePath = ""
+    @State private var vadPath = ""
     @State private var senseVoiceStatus: ModelCheckResult = .checking
     @State private var vadStatus: ModelCheckResult = .checking
 
@@ -30,9 +30,9 @@ struct ModelsSettingsView: View {
         }
     }
 
-    private func settingSection<Content: View>(
+    private func settingSection(
         title: String,
-        @ViewBuilder content: () -> Content
+        @ViewBuilder content: () -> some View
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             if !title.isEmpty {
@@ -84,7 +84,7 @@ struct ModelsSettingsView: View {
         senseVoiceStatus = .checking
         let senseVoiceCandidates = [
             modelsDir.appendingPathComponent("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"),
-            modelsDir.appendingPathComponent("sensevoice-small")
+            modelsDir.appendingPathComponent("sensevoice-small"),
         ]
 
         var found = false
@@ -108,7 +108,7 @@ struct ModelsSettingsView: View {
         vadStatus = .checking
         let vadCandidates = [
             modelsDir.appendingPathComponent("silero_vad.onnx"),
-            home.appendingPathComponent("Library/Application Support/Shandianshuo/models/silero_vad.onnx")
+            home.appendingPathComponent("Library/Application Support/Shandianshuo/models/silero_vad.onnx"),
         ]
 
         found = false

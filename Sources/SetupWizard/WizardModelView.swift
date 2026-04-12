@@ -116,16 +116,18 @@ struct WizardModelView: View {
         DispatchQueue.global().async {
             let senseVoiceCandidates = [
                 modelsDir.appendingPathComponent("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"),
-                modelsDir.appendingPathComponent("sensevoice-small")
+                modelsDir.appendingPathComponent("sensevoice-small"),
             ]
 
             var found = false
             for candidate in senseVoiceCandidates {
                 if fileManager.fileExists(atPath: candidate.path) {
                     let modelFiles = try? fileManager.contentsOfDirectory(atPath: candidate.path)
-                    if let files = modelFiles, files.contains(where: { $0.hasSuffix(".onnx") || $0.hasSuffix(".txt") }) {
+                    if let files = modelFiles,
+                       files.contains(where: { $0.hasSuffix(".onnx") || $0.hasSuffix(".txt") })
+                    {
                         DispatchQueue.main.async {
-                            self.status.senseVoice = .found(candidate.path)
+                            status.senseVoice = .found(candidate.path)
                         }
                         found = true
                         break
@@ -135,7 +137,7 @@ struct WizardModelView: View {
 
             if !found {
                 DispatchQueue.main.async {
-                    self.status.senseVoice = .missing("~/Library/Application Support/SoundFlow/models/sensevoice-small")
+                    status.senseVoice = .missing("~/Library/Application Support/SoundFlow/models/sensevoice-small")
                 }
             }
         }
@@ -143,14 +145,14 @@ struct WizardModelView: View {
         DispatchQueue.global().async {
             let vadCandidates = [
                 modelsDir.appendingPathComponent("silero_vad.onnx"),
-                home.appendingPathComponent("Library/Application Support/Shandianshuo/models/silero_vad.onnx")
+                home.appendingPathComponent("Library/Application Support/Shandianshuo/models/silero_vad.onnx"),
             ]
 
             var found = false
             for candidate in vadCandidates {
                 if fileManager.fileExists(atPath: candidate.path) {
                     DispatchQueue.main.async {
-                        self.status.vad = .found(candidate.path)
+                        status.vad = .found(candidate.path)
                     }
                     found = true
                     break
@@ -159,7 +161,7 @@ struct WizardModelView: View {
 
             if !found {
                 DispatchQueue.main.async {
-                    self.status.vad = .missing("~/Library/Application Support/SoundFlow/models/silero_vad.onnx")
+                    status.vad = .missing("~/Library/Application Support/SoundFlow/models/silero_vad.onnx")
                 }
             }
         }

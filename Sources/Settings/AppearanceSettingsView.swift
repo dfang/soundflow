@@ -25,9 +25,9 @@ struct AppearanceSettingsView: View {
         .foregroundColor(.white)
     }
 
-    private func settingSection<Content: View>(
+    private func settingSection(
         title: String,
-        @ViewBuilder content: () -> Content
+        @ViewBuilder content: () -> some View
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title)

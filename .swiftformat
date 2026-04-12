@@ -7,10 +7,10 @@
 
 # import 排序
 --importgrouping testable-last
---sortedimports enabled
+
 
 # closure 风格
---closurevoid return
+--closure-void remove
 --trailingclosures enabled
 
 # 空格 & 换行
@@ -22,10 +22,10 @@
 --guardelse same-line
 
 # self 使用
---self insert
+# --self insert
 
 # 可选链
---optionalbinding remove
+
 
 # enum case
 --redundanttype inferred

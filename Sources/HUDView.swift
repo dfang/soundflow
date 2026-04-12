@@ -158,7 +158,7 @@ struct HUDView: View {
         LinearGradient(
             colors: [
                 Color(red: 0.10, green: 0.13, blue: 0.18),
-                Color(red: 0.14, green: 0.17, blue: 0.23)
+                Color(red: 0.14, green: 0.17, blue: 0.23),
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing

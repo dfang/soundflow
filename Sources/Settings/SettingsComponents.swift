@@ -11,7 +11,7 @@ struct SettingsSectionContainer<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if let title = title {
+            if let title {
                 Text(title)
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)

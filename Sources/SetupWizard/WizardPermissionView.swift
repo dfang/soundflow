@@ -3,10 +3,10 @@ import AVFoundation
 import SwiftUI
 
 struct PermissionStatus {
-    var microphone: Bool = false
-    var accessibility: Bool = false
-    var microphoneChecked: Bool = false
-    var accessibilityChecked: Bool = false
+    var microphone = false
+    var accessibility = false
+    var microphoneChecked = false
+    var accessibilityChecked = false
 }
 
 struct WizardPermissionView: View {

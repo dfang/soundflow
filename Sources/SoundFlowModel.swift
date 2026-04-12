@@ -331,14 +331,14 @@ final class SoundFlowModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
             guard let self else { return }
             if !keepHUDHidden {
-                self.hideHUD()
+                hideHUD()
             }
-            self.showSuccess = false
-            self.setPhase(.idle)
-            self.previewText = "Press Right Control to start speaking."
-            self.postProcessingStatus = "Idle"
-            self.errorMessage = nil
-            self.targetApplication = nil
+            showSuccess = false
+            setPhase(.idle)
+            previewText = "Press Right Control to start speaking."
+            postProcessingStatus = "Idle"
+            errorMessage = nil
+            targetApplication = nil
         }
     }
 
@@ -358,13 +358,13 @@ final class SoundFlowModel: ObservableObject {
         showSuccess = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
             guard let self else { return }
-            self.hideHUD()
-            self.showSuccess = false
-            self.setPhase(.idle)
-            self.previewText = "Press Right Control to start speaking."
-            self.postProcessingStatus = "Idle"
-            self.errorMessage = nil
-            self.targetApplication = nil
+            hideHUD()
+            showSuccess = false
+            setPhase(.idle)
+            previewText = "Press Right Control to start speaking."
+            postProcessingStatus = "Idle"
+            errorMessage = nil
+            targetApplication = nil
         }
     }
 
@@ -420,18 +420,18 @@ final class SoundFlowModel: ObservableObject {
         showHUD()
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             guard let self else { return }
-            self.hideHUD()
-            if self.phase == .idle {
-                self.previewText = "Press Right Control to start speaking."
-                self.postProcessingStatus = "Idle"
-                self.errorMessage = nil
+            hideHUD()
+            if phase == .idle {
+                previewText = "Press Right Control to start speaking."
+                postProcessingStatus = "Idle"
+                errorMessage = nil
             }
         }
     }
 
     private func requestCommitWithFeedback() {
         guard phase == .recording else { return }
-        self.commitRecording()
+        commitRecording()
     }
 
     private func cancelPendingCommit() {
@@ -441,19 +441,19 @@ final class SoundFlowModel: ObservableObject {
 
     private func installKeyMonitor() {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, self.isHUDVisible else { return event }
+            guard let self, isHUDVisible else { return event }
 
             switch Int(event.keyCode) {
             case Int(kVK_Escape):
-                self.cancelRecording()
+                cancelRecording()
                 return nil
             case Int(kVK_Return), Int(kVK_ANSI_KeypadEnter):
-                if self.phase == .recording {
-                    self.requestCommitWithFeedback()
+                if phase == .recording {
+                    requestCommitWithFeedback()
                     return nil
                 }
-                if self.phase == .error {
-                    self.dismissHUD()
+                if phase == .error {
+                    dismissHUD()
                     return nil
                 }
                 return event

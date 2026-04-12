@@ -29,13 +29,13 @@ struct KeyRecorderView: View {
     private func startRecording() {
         isRecording = true
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard self.isRecording else { return event }
+            guard isRecording else { return event }
 
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             guard event.keyCode != 0 || flags.contains(.function) else { return nil }
 
             configuration = HotKeyConfiguration.from(event: event)
-            self.stopRecording()
+            stopRecording()
             return nil
         }
     }

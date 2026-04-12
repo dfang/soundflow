@@ -89,8 +89,8 @@ enum AudioDeviceManager {
                 mElement: kAudioObjectPropertyElementMain
             )
 
-            var deviceName: CFString = "" as CFString
-            var nameSize = UInt32(MemoryLayout<CFString>.size)
+            var deviceName: UnsafeMutableRawPointer?
+            var nameSize = UInt32(MemoryLayout<UnsafeMutableRawPointer?>.size)
 
             let nameStatus = AudioObjectGetPropertyData(
                 deviceID,
@@ -101,11 +101,12 @@ enum AudioDeviceManager {
                 &deviceName
             )
 
-            guard nameStatus == noErr else { continue }
+            guard nameStatus == noErr, let deviceNamePtr = deviceName else { continue }
+            let cfName = Unmanaged<CFString>.fromOpaque(deviceNamePtr).takeUnretainedValue()
 
             inputDevices.append(AudioDevice(
                 id: String(deviceID),
-                name: deviceName as String,
+                name: cfName as String,
                 isDefault: deviceID == defaultDeviceID
             ))
         }

@@ -35,7 +35,7 @@ struct DeepseekPostProcessor: TextPostProcessing {
             }
             guard !apiKey.isEmpty else {
                 Task {
-                    continuation.yield(await fallback(trimmed))
+                    await continuation.yield(fallback(trimmed))
                     continuation.finish()
                 }
                 return
@@ -47,7 +47,7 @@ struct DeepseekPostProcessor: TextPostProcessing {
                         model: modelName,
                         messages: [
                             ChatMessage(role: "system", content: systemPrompt),
-                            ChatMessage(role: "user", content: trimmed)
+                            ChatMessage(role: "user", content: trimmed),
                         ],
                         temperature: 0.0,
                         maxTokens: 96,
@@ -63,8 +63,9 @@ struct DeepseekPostProcessor: TextPostProcessing {
 
                     let (bytes, response) = try await URLSession.shared.bytes(for: request)
                     guard let httpResponse = response as? HTTPURLResponse,
-                          (200..<300).contains(httpResponse.statusCode) else {
-                        continuation.yield(await fallback(trimmed))
+                          (200 ..< 300).contains(httpResponse.statusCode) else
+                    {
+                        await continuation.yield(fallback(trimmed))
                         continuation.finish()
                         return
                     }
@@ -79,7 +80,8 @@ struct DeepseekPostProcessor: TextPostProcessing {
                         guard let data = dataLine.data(using: .utf8),
                               let chunk = try? JSONDecoder().decode(DeepseekStreamResponse.self, from: data),
                               let content = chunk.choices.first?.delta.content,
-                              !content.isEmpty else {
+                              !content.isEmpty else
+                        {
                             continue
                         }
 
@@ -88,11 +90,11 @@ struct DeepseekPostProcessor: TextPostProcessing {
                     }
 
                     if !emittedToken {
-                        continuation.yield(await fallback(trimmed))
+                        await continuation.yield(fallback(trimmed))
                     }
                     continuation.finish()
                 } catch {
-                    continuation.yield(await fallback(trimmed))
+                    await continuation.yield(fallback(trimmed))
                     continuation.finish()
                 }
             }

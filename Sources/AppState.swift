@@ -10,11 +10,12 @@ final class AppState: ObservableObject {
 
     @AppStorage("isFirstLaunch") var isFirstLaunch = true
     @AppStorage("selectedAudioDeviceID") var selectedAudioDeviceID: String?
-    @AppStorage("hotKeyKeyCode") var hotKeyKeyCode: Int = 62 // Right Control
-    @AppStorage("hotKeyModifiers") var hotKeyModifiers: Int = .init(NSEvent.ModifierFlags.control.rawValue) // Control modifier
+    @AppStorage("hotKeyKeyCode") var hotKeyKeyCode = 62 // Right Control
+    @AppStorage("hotKeyModifiers") var hotKeyModifiers: Int = .init(NSEvent.ModifierFlags.control
+        .rawValue) // Control modifier
     @AppStorage("launchAtLogin") var launchAtLogin = false
-    @AppStorage("hudCorner") var hudCorner: Int = 1 // Bottom Center
-    @AppStorage("hudSize") var hudSize: Double = 0.5
+    @AppStorage("hudCorner") var hudCorner = 1 // Bottom Center
+    @AppStorage("hudSize") var hudSize = 0.5
 
     @Published var showWizard = false
 

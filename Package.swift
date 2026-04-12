@@ -9,10 +9,10 @@ let sherpaLibDirectory = "\(packageDirectory)/Vendor/sherpa-onnx/lib"
 let package = Package(
     name: "SoundFlow",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v14),
     ],
     products: [
-        .executable(name: "SoundFlow", targets: ["SoundFlow"])
+        .executable(name: "SoundFlow", targets: ["SoundFlow"]),
     ],
     targets: [
         .systemLibrary(
@@ -22,20 +22,20 @@ let package = Package(
         .executableTarget(
             name: "SoundFlow",
             dependencies: [
-                "CSherpaOnnx"
+                "CSherpaOnnx",
             ],
             path: "Sources",
             exclude: [
-                "CSherpaOnnx"
+                "CSherpaOnnx",
             ],
             linkerSettings: [
                 .linkedLibrary("onnxruntime"),
                 .unsafeFlags([
                     "-L", sherpaLibDirectory,
                     "-Xlinker", "-rpath",
-                    "-Xlinker", sherpaLibDirectory
-                ])
+                    "-Xlinker", sherpaLibDirectory,
+                ]),
             ]
-        )
+        ),
     ]
 )
