@@ -39,29 +39,12 @@ struct SmartPostProcessor: TextPostProcessing {
                 do {
                     for try await token in stream {
                         candidate += token
+                        continuation.yield(token)
                     }
                 } catch {
-                    candidate = trimmed
                     didFallbackOnError = true
                 }
 
-                candidate = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
-
-                if didFallbackOnError || candidate.isEmpty || looksLikeExpansion(
-                    original: trimmed,
-                    candidate: candidate
-                ) {
-                    let reason: String = if didFallbackOnError {
-                        "wrapped processor stream failed"
-                    } else {
-                        candidate.isEmpty ? "empty result" : "expanded text"
-                    }
-                    PostProcessingTelemetry.record(.fallback, reason: reason)
-                    continuation.yield(trimmed)
-                } else {
-                    PostProcessingTelemetry.record(.triggered, reason: decision.reason)
-                    continuation.yield(candidate)
-                }
                 continuation.finish()
             }
         }
