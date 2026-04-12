@@ -18,13 +18,13 @@ enum ModelPathResolverError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .modelDirectoryNotFound(let candidates):
+        case let .modelDirectoryNotFound(candidates):
             return "SenseVoice model not found. Checked: \(candidates.joined(separator: ", "))"
-        case .compatibleModelNotFound(let candidates):
+        case let .compatibleModelNotFound(candidates):
             return "Found SenseVoice files, but not a sherpa-onnx compatible model package. Put the official sherpa-onnx SenseVoice model under one of: \(candidates.joined(separator: ", "))"
-        case .vadModelNotFound(let candidates):
+        case let .vadModelNotFound(candidates):
             return "VAD model not found. Put silero_vad.onnx under one of: \(candidates.joined(separator: ", "))"
-        case .missingFile(let url):
+        case let .missingFile(url):
             return "Missing required model file: \(url.path)"
         }
     }
@@ -38,7 +38,7 @@ enum ModelPathResolver {
         let candidates = [
             home.appendingPathComponent("Library/Application Support/SoundFlow/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"),
             home.appendingPathComponent("Library/Application Support/SoundFlow/models/sensevoice-small"),
-            home.appendingPathComponent("Library/Application Support/Shandianshuo/models/sensevoice-small"),
+            home.appendingPathComponent("Library/Application Support/Shandianshuo/models/sensevoice-small")
         ]
 
         let existingCandidates = candidates.filter { fileManager.fileExists(atPath: $0.path) }
@@ -61,7 +61,7 @@ enum ModelPathResolver {
 
         let candidates = [
             home.appendingPathComponent("Library/Application Support/SoundFlow/models/silero_vad.onnx"),
-            home.appendingPathComponent("Library/Application Support/Shandianshuo/models/silero_vad.onnx"),
+            home.appendingPathComponent("Library/Application Support/Shandianshuo/models/silero_vad.onnx")
         ]
 
         guard let model = candidates.first(where: { fileManager.fileExists(atPath: $0.path) }) else {
@@ -75,14 +75,15 @@ enum ModelPathResolver {
         let fileManager = FileManager.default
         let modelCandidates = [
             directory.appendingPathComponent("model.int8.onnx"),
-            directory.appendingPathComponent("model.onnx"),
+            directory.appendingPathComponent("model.onnx")
         ]
         let tokenCandidates = [
-            directory.appendingPathComponent("tokens.txt"),
+            directory.appendingPathComponent("tokens.txt")
         ]
 
         guard let model = modelCandidates.first(where: { fileManager.fileExists(atPath: $0.path) }),
-              let tokens = tokenCandidates.first(where: { fileManager.fileExists(atPath: $0.path) }) else {
+              let tokens = tokenCandidates.first(where: { fileManager.fileExists(atPath: $0.path) })
+        else {
             return nil
         }
 
