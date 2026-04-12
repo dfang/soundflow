@@ -278,6 +278,7 @@ final class SoundFlowModel: ObservableObject {
                         return
                     }
 
+                    self.hideHUD()
                     let result = self.textOutputService.output(
                         finalText,
                         targetApplication: self.targetApplication,
@@ -286,11 +287,12 @@ final class SoundFlowModel: ObservableObject {
 
                     switch result {
                     case .inserted:
-                        self.finishCommitStatusOnly(with: finalText)
+                        self.finishCommitStatusOnly(with: finalText, keepHUDHidden: true)
                     case .accessibilityUnavailable:
                         self.setError("Accessibility permission is required before inserting text.")
                         self.scheduleHUDDismiss(after: 2.0)
                     case .injectionFailed:
+                        self.showHUD()
                         self.setError("Direct text injection failed for the focused field.")
                         self.scheduleHUDDismiss(after: 2.0)
                     }
@@ -304,7 +306,7 @@ final class SoundFlowModel: ObservableObject {
         }
     }
 
-    private func finishCommitStatusOnly(with text: String) {
+    private func finishCommitStatusOnly(with text: String, keepHUDHidden: Bool = false) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         setPhase(.committing)
         lastCommittedText = trimmed
@@ -313,7 +315,9 @@ final class SoundFlowModel: ObservableObject {
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
             guard let self else { return }
-            self.hideHUD()
+            if !keepHUDHidden {
+                self.hideHUD()
+            }
             self.showSuccess = false
             self.setPhase(.idle)
             self.previewText = "Press Right Control to start speaking."

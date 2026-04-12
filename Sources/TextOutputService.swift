@@ -8,7 +8,8 @@ enum TextOutputResult {
 
 struct TextOutputService {
     private let permissionManager = PermissionManager()
-    private let activationDelay: TimeInterval = 0.28
+    private let activationRetryDelay: TimeInterval = 0.06
+    private let activationRetryCount = 4
 
     @discardableResult
     func output(
@@ -20,38 +21,55 @@ struct TextOutputService {
             return .accessibilityUnavailable
         }
 
-        bringTargetToFront(targetApplication)
-        usleep(UInt32(activationDelay * 1_000_000))
-
-        if let targetApplication,
-           targetApplication != .current,
-           NSWorkspace.shared.frontmostApplication?.bundleIdentifier != targetApplication.bundleIdentifier {
+        if !activateTargetApplication(targetApplication) {
             return .injectionFailed
         }
 
-        return injectTextWithKeyboardEvents(text) ? .inserted : .injectionFailed
+        return injectTextWithKeyboardEvents(text, targetApplication: targetApplication) ? .inserted : .injectionFailed
     }
 
-    private func bringTargetToFront(_ targetApplication: NSRunningApplication?) {
-        guard let targetApplication, targetApplication != .current else { return }
-        targetApplication.unhide()
-        _ = targetApplication.activate(options: [.activateAllWindows])
+    private func activateTargetApplication(_ targetApplication: NSRunningApplication?) -> Bool {
+        guard let targetApplication, targetApplication != .current else { return true }
+
+        let targetBundleID = targetApplication.bundleIdentifier
+
+        for attempt in 0..<activationRetryCount {
+            targetApplication.unhide()
+            _ = targetApplication.activate(options: [.activateAllWindows])
+
+            let frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            if frontmostBundleID == targetBundleID {
+                return true
+            }
+
+            if attempt < activationRetryCount - 1 {
+                usleep(UInt32(activationRetryDelay * 1_000_000))
+            }
+        }
+
+        return false
     }
 
-    private func injectTextWithKeyboardEvents(_ text: String) -> Bool {
+    private func injectTextWithKeyboardEvents(_ text: String, targetApplication: NSRunningApplication?) -> Bool {
+        // 1. 注入前最终焦点确认
+        if let target = targetApplication, NSWorkspace.shared.frontmostApplication != target {
+            print("[SoundFlow] Injection aborted: Target app \(target.bundleIdentifier ?? "unknown") is no longer frontmost.")
+            return false
+        }
+
         guard let source = CGEventSource(stateID: .hidSystemState) else {
+            print("[SoundFlow] Injection failed: Could not create CGEventSource.")
             return false
         }
 
         let scalars = Array(text.utf16)
-        guard !scalars.isEmpty else {
-            return true
-        }
+        guard !scalars.isEmpty else { return true }
 
         guard
             let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
             let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
         else {
+            print("[SoundFlow] Injection failed: Could not create CGEvent.")
             return false
         }
 

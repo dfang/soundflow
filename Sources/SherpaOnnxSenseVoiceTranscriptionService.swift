@@ -20,8 +20,10 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
 
     private let minimumPreviewSamples = 3_200
     private let previewStrideSamples = 1_600
-    private let previewReuseSlackSamples = 16_000
-    private let previewCoverageThreshold = 0.85
+    private let previewReuseSlackSamples = 8_000
+    private let previewCoverageThreshold = 0.80
+    private let previewReuseWaitMillis = 160
+    private let previewReusePollMillis = 20
 
     init(model: ModelDescriptor) {
         self.model = model
@@ -96,9 +98,9 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
         }
 
         if payload.previewDecodeInFlight, shouldLikelyReusePreview(payload: payload) {
-            let deadline = ContinuousClock.now + .milliseconds(280)
+            let deadline = ContinuousClock.now + .milliseconds(previewReuseWaitMillis)
             while ContinuousClock.now < deadline {
-                try? await Task.sleep(for: .milliseconds(40))
+                try? await Task.sleep(for: .milliseconds(previewReusePollMillis))
                 payload = snapshotState()
                 if !payload.previewDecodeInFlight {
                     break
