@@ -1,5 +1,5 @@
-import Foundation
 import CSherpaOnnx
+import Foundation
 
 enum SherpaOnnxError: LocalizedError {
     case recognizerCreationFailed
@@ -27,7 +27,7 @@ func sherpaToCPointer(_ string: String) -> UnsafePointer<Int8>! {
 }
 
 func sherpaOnnxFeatureConfig(
-    sampleRate: Int = 16_000,
+    sampleRate: Int = 16000,
     featureDim: Int = 80
 ) -> SherpaOnnxFeatureConfig {
     SherpaOnnxFeatureConfig(
@@ -108,7 +108,7 @@ func sherpaOnnxTenVadModelConfig(
 
 func sherpaOnnxVadModelConfig(
     sileroVad: SherpaOnnxSileroVadModelConfig,
-    sampleRate: Int32 = 16_000,
+    sampleRate: Int32 = 16000,
     numThreads: Int = 1,
     provider: String = "cpu",
     debug: Int = 0,

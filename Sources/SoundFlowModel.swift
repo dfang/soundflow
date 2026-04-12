@@ -19,6 +19,9 @@ final class SoundFlowModel: ObservableObject {
     @Published private(set) var asrModelName: String
     @Published private(set) var asrModelSource: String
     @Published private(set) var postProcessorModelName: String
+    @Published var showWizard = false
+
+    let appState = AppState.shared
 
     private let permissionManager = PermissionManager()
     private let audioCaptureService = AudioCaptureService()
@@ -36,13 +39,13 @@ final class SoundFlowModel: ObservableObject {
 
     private init(runtime: AppRuntime) {
         self.runtime = runtime
-        self.transcriptionService = runtime.transcriptionService
-        self.postProcessor = runtime.postProcessor
-        self.asrBackendName = runtime.configuration.asrBackend.rawValue
-        self.postProcessorName = runtime.configuration.postProcessorBackend.rawValue
-        self.asrModelName = runtime.configuration.selectedASRModel.displayName
-        self.asrModelSource = runtime.configuration.selectedASRModel.source.displayName
-        self.postProcessorModelName = runtime.configuration.selectedPostProcessorModel.displayName
+        transcriptionService = runtime.transcriptionService
+        postProcessor = runtime.postProcessor
+        asrBackendName = runtime.configuration.asrBackend.rawValue
+        postProcessorName = runtime.configuration.postProcessorBackend.rawValue
+        asrModelName = runtime.configuration.selectedASRModel.displayName
+        asrModelSource = runtime.configuration.selectedASRModel.source.displayName
+        postProcessorModelName = runtime.configuration.selectedPostProcessorModel.displayName
 
         audioCaptureService.onLevel = { [weak self] level in
             self?.audioLevel = level
@@ -55,6 +58,8 @@ final class SoundFlowModel: ObservableObject {
         transcriptionService.onPreview = { [weak self] text in
             self?.previewText = text
         }
+
+        showWizard = appState.isFirstLaunch
     }
 
     func bootstrap() {
@@ -65,7 +70,10 @@ final class SoundFlowModel: ObservableObject {
         installKeyMonitor()
 
         do {
-            let hotKeyService = GlobalHotKeyService()
+            let hotKeyService = GlobalHotKeyService(
+                keyCode: appState.hotKeyKeyCode,
+                modifiers: appState.hotKeyModifiers
+            )
             hotKeyService.onTrigger = { [weak self] in
                 DispatchQueue.main.async {
                     self?.handleHotKey()
@@ -74,7 +82,11 @@ final class SoundFlowModel: ObservableObject {
             try hotKeyService.start()
             self.hotKeyService = hotKeyService
         } catch {
-            setError("Failed to register Right Control hotkey: \(error.localizedDescription)")
+            setError("Failed to register hotkey: \(error.localizedDescription)")
+        }
+
+        if let deviceID = appState.selectedAudioDeviceID {
+            audioCaptureService.selectDevice(deviceID: deviceID)
         }
     }
 
@@ -150,6 +162,10 @@ final class SoundFlowModel: ObservableObject {
 
     var runtimeSummary: String {
         "\(asrBackendName) -> \(postProcessorName)"
+    }
+
+    var currentAudioDeviceName: String {
+        return "系统默认麦克风"
     }
 
     func handleHotKey() {

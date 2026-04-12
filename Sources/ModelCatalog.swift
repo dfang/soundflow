@@ -20,11 +20,11 @@ enum ModelSource: Hashable {
 
     var displayName: String {
         switch self {
-        case .modelScope(let repository):
+        case let .modelScope(repository):
             return "ModelScope: \(repository)"
         case .localBundle:
             return "Bundled with app"
-        case .customURL(let url):
+        case let .customURL(url):
             return url
         }
     }
