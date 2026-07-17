@@ -70,11 +70,15 @@ struct DeepseekPostProcessor: TextPostProcessing {
                     }
 
                     var bufferedOutput = ""
+                    var receivedDone = false
                     for try await line in bytes.lines {
                         guard line.hasPrefix("data: ") else { continue }
 
                         let dataLine = String(line.dropFirst(6))
-                        if dataLine == "[DONE]" { break }
+                        if dataLine == "[DONE]" {
+                            receivedDone = true
+                            break
+                        }
 
                         guard let data = dataLine.data(using: .utf8),
                               let chunk = try? JSONDecoder().decode(DeepseekStreamResponse.self, from: data),
@@ -86,7 +90,7 @@ struct DeepseekPostProcessor: TextPostProcessing {
                         bufferedOutput += content
                     }
 
-                    if bufferedOutput.isEmpty {
+                    if !receivedDone || bufferedOutput.isEmpty {
                         continuation.yield(fallback(trimmed))
                     } else {
                         continuation.yield(bufferedOutput)

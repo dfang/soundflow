@@ -57,6 +57,24 @@ final class DeepseekPostProcessorTests: XCTestCase {
         XCTAssertEqual(result, "preserve this input")
     }
 
+    func testCleanEOFWithoutDoneMarkerDiscardsPartialOutput() async {
+        URLProtocol.registerClass(IncompleteStreamURLProtocol.self)
+        defer { URLProtocol.unregisterClass(IncompleteStreamURLProtocol.self) }
+        UserDefaults.standard.set("test-api-key", forKey: apiKeyName)
+        let processor = DeepseekPostProcessor(model: ModelCatalog.defaultPostProcessorModel)
+
+        var result = ""
+        do {
+            for try await token in processor.processStream(rawText: "  preserve this input  ") {
+                result += token
+            }
+        } catch {
+            XCTFail("DeepSeek fallback should finish without throwing: \(error)")
+        }
+
+        XCTAssertEqual(result, "preserve this input")
+    }
+
     func testPromptForbidsRoutineTerminalPunctuation() throws {
         let testFile = URL(fileURLWithPath: #filePath)
         let repositoryRoot = testFile
@@ -98,6 +116,33 @@ private final class PartialFailureURLProtocol: URLProtocol {
                 didFailWithError: NSError(domain: "DeepseekPostProcessorTests", code: 1)
             )
         }
+    }
+
+    override func stopLoading() {}
+}
+
+private final class IncompleteStreamURLProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool {
+        request.url?.host == "api.deepseek.com"
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 200,
+            httpVersion: "HTTP/1.1",
+            headerFields: ["Content-Type": "text/event-stream"]
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(
+            self,
+            didLoad: Data("data: {\"choices\":[{\"delta\":{\"content\":\"partial output\"}}]}\n\n".utf8)
+        )
+        client?.urlProtocolDidFinishLoading(self)
     }
 
     override func stopLoading() {}
