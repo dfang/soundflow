@@ -40,5 +40,10 @@ let package = Package(
                 ]),
             ]
         ),
+        .testTarget(
+            name: "SoundFlowTests",
+            dependencies: ["SoundFlow"],
+            path: "Tests/SoundFlowTests"
+        ),
     ]
 )

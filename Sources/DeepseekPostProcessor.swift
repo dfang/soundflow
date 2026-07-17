@@ -22,7 +22,7 @@ struct DeepseekPostProcessor: TextPostProcessing {
             }
             return result.trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {
-            return await fallback(trimmed)
+            return fallback(trimmed)
         }
     }
 
@@ -35,7 +35,7 @@ struct DeepseekPostProcessor: TextPostProcessing {
             }
             guard !apiKey.isEmpty else {
                 Task {
-                    await continuation.yield(fallback(trimmed))
+                    continuation.yield(fallback(trimmed))
                     continuation.finish()
                 }
                 return
@@ -64,7 +64,7 @@ struct DeepseekPostProcessor: TextPostProcessing {
                     let (bytes, response) = try await URLSession.shared.bytes(for: request)
                     guard let httpResponse = response as? HTTPURLResponse,
                           (200 ..< 300).contains(httpResponse.statusCode) else {
-                        await continuation.yield(fallback(trimmed))
+                        continuation.yield(fallback(trimmed))
                         continuation.finish()
                         return
                     }
@@ -88,11 +88,11 @@ struct DeepseekPostProcessor: TextPostProcessing {
                     }
 
                     if !emittedToken {
-                        await continuation.yield(fallback(trimmed))
+                        continuation.yield(fallback(trimmed))
                     }
                     continuation.finish()
                 } catch {
-                    await continuation.yield(fallback(trimmed))
+                    continuation.yield(fallback(trimmed))
                     continuation.finish()
                 }
             }
@@ -106,7 +106,10 @@ struct DeepseekPostProcessor: TextPostProcessing {
         Rules:
         - NEVER answer questions, never add explanations, never add new content
         - NEVER change meaning, names, numbers, or intent
-        - Only fix: missing punctuation, incorrect words that are obvious ASR mistakes, capitalization
+        - Preserve the input's existing punctuation by default
+        - Add punctuation only when omitting it would create clear ambiguity
+        - Do not automatically add sentence-ending punctuation
+        - Only fix obvious ASR mistakes, capitalization, spacing, and ambiguity-resolving punctuation
         - If uncertain, leave it unchanged
         Return ONLY the corrected text. No quotes, no preamble, no follow-up.
 
@@ -120,16 +123,16 @@ struct DeepseekPostProcessor: TextPostProcessing {
         Input: "我把代码体教上去了"
         Output: "我把代码提交上去了"
 
-        Input: "今天天气真好啊我们出去玩吧"
-        Output: "今天天气真好啊，我们出去玩吧。"
+        Input: "如果你明天有空我们一起开会"
+        Output: "如果你明天有空，我们一起开会"
 
         Input: "发给张三"
         Output: "发给张三"
         """
     }
 
-    private func fallback(_ text: String) async -> String {
-        await MockPostProcessor(model: model).process(text)
+    private func fallback(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
