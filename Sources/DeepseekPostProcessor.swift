@@ -69,7 +69,7 @@ struct DeepseekPostProcessor: TextPostProcessing {
                         return
                     }
 
-                    var emittedToken = false
+                    var bufferedOutput = ""
                     for try await line in bytes.lines {
                         guard line.hasPrefix("data: ") else { continue }
 
@@ -83,12 +83,13 @@ struct DeepseekPostProcessor: TextPostProcessing {
                             continue
                         }
 
-                        emittedToken = true
-                        continuation.yield(content)
+                        bufferedOutput += content
                     }
 
-                    if !emittedToken {
+                    if bufferedOutput.isEmpty {
                         continuation.yield(fallback(trimmed))
+                    } else {
+                        continuation.yield(bufferedOutput)
                     }
                     continuation.finish()
                 } catch {
