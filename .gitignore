@@ -4,3 +4,4 @@
 dist/
 .omx/
 graphify-out/
+.worktrees/
