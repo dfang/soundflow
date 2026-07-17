@@ -10,6 +10,7 @@ struct SoundFlowApp: App {
     @State private var setupWindowController: SetupWindowController?
 
     init() {
+        AppLogger.info("SoundFlow started", category: .system)
         SoundFlowModel.shared.bootstrap()
     }
 

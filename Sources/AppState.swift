@@ -16,6 +16,11 @@ final class AppState: ObservableObject {
     @AppStorage("launchAtLogin") var launchAtLogin = false
     @AppStorage("hudCorner") var hudCorner = 1 // Bottom Center
     @AppStorage("hudSize") var hudSize = 0.5
+    @AppStorage("debugMode") var debugMode = false {
+        didSet {
+            DebugModeManager.shared.enabled = debugMode
+        }
+    }
 
     @Published var showWizard = false
 

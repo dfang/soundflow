@@ -1,6 +1,8 @@
 import Foundation
+import os
 
 final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unchecked Sendable {
+    private let logger = AppLogger.logger(for: .transcription)
     let displayName = ASRBackend.sherpaSenseVoice.rawValue
     let model: ModelDescriptor
     var onPreview: ((String) -> Void)?
@@ -46,7 +48,7 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
         vad.clear()
         lock.unlock()
 
-        onPreview?("Listening...")
+        AppLogger.info("Transcription started", category: .transcription)
     }
 
     func appendAudio(samples: [Float], sampleRate: Int) {

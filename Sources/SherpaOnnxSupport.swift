@@ -111,7 +111,7 @@ func sherpaOnnxVadModelConfig(
     sampleRate: Int32 = 16000,
     numThreads: Int = 1,
     provider: String = "cpu",
-    debug: Int = 0,
+    debug _: Int = 0,
     tenVad: SherpaOnnxTenVadModelConfig = sherpaOnnxTenVadModelConfig()
 ) -> SherpaOnnxVadModelConfig {
     SherpaOnnxVadModelConfig(
@@ -119,7 +119,7 @@ func sherpaOnnxVadModelConfig(
         sample_rate: sampleRate,
         num_threads: Int32(numThreads),
         provider: sherpaToCPointer(provider),
-        debug: Int32(debug),
+        debug: 0,
         ten_vad: tenVad
     )
 }
@@ -129,7 +129,7 @@ func sherpaOnnxOfflineModelConfig(
     senseVoice: SherpaOnnxOfflineSenseVoiceModelConfig,
     numThreads: Int = 2,
     provider: String = "cpu",
-    debug: Int = 0
+    debug _: Int = 0
 ) -> SherpaOnnxOfflineModelConfig {
     SherpaOnnxOfflineModelConfig(
         transducer: SherpaOnnxOfflineTransducerModelConfig(),
@@ -139,7 +139,7 @@ func sherpaOnnxOfflineModelConfig(
         tdnn: SherpaOnnxOfflineTdnnModelConfig(),
         tokens: sherpaToCPointer(tokens),
         num_threads: Int32(numThreads),
-        debug: Int32(debug),
+        debug: 0,
         provider: sherpaToCPointer(provider),
         model_type: sherpaToCPointer(""),
         modeling_unit: sherpaToCPointer("cjkchar"),
