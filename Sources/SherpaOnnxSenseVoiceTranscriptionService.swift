@@ -343,9 +343,16 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
     }
 
     private static func normalize(_ text: String) -> String {
-        text
+        var result = text
             .replacingOccurrences(of: "<\\|[^|]+\\|>", with: "", options: .regularExpression)
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // SenseVoice predicts sentence-ending punctuation; drop a trailing period
+        // so the committed text does not end with an unwanted "。".
+        while let last = result.last, last == "。" || last == "." {
+            result.removeLast()
+        }
+        return result
     }
 }
