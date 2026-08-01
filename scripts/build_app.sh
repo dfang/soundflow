@@ -38,6 +38,18 @@ require_command swift
 require_command install_name_tool
 require_command codesign
 
+# 签名身份：优先环境变量，否则自动检测第一个 Apple Development 证书
+CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:-}"
+if [[ -z "$CODE_SIGN_IDENTITY" ]]; then
+    CODE_SIGN_IDENTITY="$(xcrun security find-identity -v -p codesigning 2>/dev/null \
+        | awk '/Apple Development/ {print $2; exit}')"
+fi
+if [[ -z "$CODE_SIGN_IDENTITY" ]]; then
+    echo "Warning: no Apple Development certificate found, falling back to ad-hoc signing." >&2
+    CODE_SIGN_IDENTITY="-"
+fi
+echo "Signing identity: $CODE_SIGN_IDENTITY"
+
 echo "Building release binary..."
 (
     cd "$ROOT_DIR"
@@ -67,9 +79,9 @@ rewrite_dependency "$MACOS_DIR/$APP_NAME" "@rpath/libsherpa-onnx-c-api.dylib" "l
 rewrite_dependency "$FRAMEWORKS_DIR/libsherpa-onnx-c-api.dylib" "@rpath/libonnxruntime.1.23.2.dylib" "libonnxruntime.1.23.2.dylib"
 rewrite_dependency "$FRAMEWORKS_DIR/libsherpa-onnx-cxx-api.dylib" "@rpath/libonnxruntime.1.23.2.dylib" "libonnxruntime.1.23.2.dylib"
 
-codesign --force --sign - "$FRAMEWORKS_DIR/libonnxruntime.1.23.2.dylib"
-codesign --force --sign - "$FRAMEWORKS_DIR/libsherpa-onnx-c-api.dylib"
-codesign --force --sign - "$FRAMEWORKS_DIR/libsherpa-onnx-cxx-api.dylib"
-codesign --force --deep --sign - "$APP_BUNDLE"
+codesign --force --sign "$CODE_SIGN_IDENTITY" "$FRAMEWORKS_DIR/libonnxruntime.1.23.2.dylib"
+codesign --force --sign "$CODE_SIGN_IDENTITY" "$FRAMEWORKS_DIR/libsherpa-onnx-c-api.dylib"
+codesign --force --sign "$CODE_SIGN_IDENTITY" "$FRAMEWORKS_DIR/libsherpa-onnx-cxx-api.dylib"
+codesign --force --deep --sign "$CODE_SIGN_IDENTITY" "$APP_BUNDLE"
 
 echo "Created app bundle: $APP_BUNDLE"
