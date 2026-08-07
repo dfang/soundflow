@@ -4,7 +4,7 @@ import SwiftUI
 @MainActor
 final class HUDWindowController {
     private let cornerRadius: CGFloat = 24
-    private let panel: FloatingPanel
+    private let panel: PassiveHUDPanel
     private var isVisible = false
 
     init(model: SoundFlowModel) {
@@ -16,9 +16,9 @@ final class HUDWindowController {
         hostingView.layer?.masksToBounds = true
         hostingView.layer?.backgroundColor = NSColor.clear.cgColor
 
-        panel = FloatingPanel(
+        panel = PassiveHUDPanel(
             contentRect: NSRect(x: 0, y: 0, width: 620, height: 188),
-            styleMask: [.borderless],
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
@@ -39,15 +39,14 @@ final class HUDWindowController {
 
     func show() {
         positionPanel()
-        NSApp.activate(ignoringOtherApps: true)
         guard !isVisible else {
-            panel.makeKeyAndOrderFront(nil)
+            panel.orderFrontRegardless()
             return
         }
 
         isVisible = true
         panel.alphaValue = 0
-        panel.makeKeyAndOrderFront(nil)
+        panel.orderFrontRegardless()
 
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.14
@@ -84,9 +83,9 @@ final class HUDWindowController {
     }
 }
 
-private final class FloatingPanel: NSPanel {
+final class PassiveHUDPanel: NSPanel {
     override var canBecomeKey: Bool {
-        true
+        false
     }
 
     override var canBecomeMain: Bool {

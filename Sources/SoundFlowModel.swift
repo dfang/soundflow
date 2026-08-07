@@ -20,6 +20,7 @@ final class SoundFlowModel: ObservableObject {
     @Published private(set) var asrModelSource: String
     @Published private(set) var postProcessorModelName: String
     @Published private(set) var postProcessingStatus = "Idle"
+    @Published private(set) var hudKeyboardCommandsAvailable = true
     @Published var showWizard = false
 
     let appState = AppState.shared
@@ -33,7 +34,7 @@ final class SoundFlowModel: ObservableObject {
 
     private var hotKeyService: GlobalHotKeyService?
     private var hudController: HUDWindowController?
-    private var keyMonitor: Any?
+    private let hudKeyCommandMonitor = HUDKeyCommandMonitor()
     private var didBootstrap = false
     private var targetApplication: NSRunningApplication?
     private var pendingCommitWorkItem: DispatchWorkItem?
@@ -48,6 +49,18 @@ final class SoundFlowModel: ObservableObject {
         asrModelName = runtime.configuration.selectedASRModel.displayName
         asrModelSource = runtime.configuration.selectedASRModel.source.displayName
         postProcessorModelName = runtime.configuration.selectedPostProcessorModel.displayName
+
+        hudKeyCommandMonitor.onCommand = { [weak self] command in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                switch command {
+                case .cancel:
+                    cancelRecording()
+                case .confirm:
+                    requestCommitWithFeedback()
+                }
+            }
+        }
 
         audioCaptureService.onLevel = { [weak self] level in
             self?.audioLevel = level
@@ -80,7 +93,6 @@ final class SoundFlowModel: ObservableObject {
         didBootstrap = true
 
         hudController = HUDWindowController(model: self)
-        installKeyMonitor()
 
         do {
             let hotKeyService = GlobalHotKeyService(
@@ -181,6 +193,13 @@ final class SoundFlowModel: ObservableObject {
         return "系统默认麦克风"
     }
 
+    var hudKeyboardHint: String {
+        guard phase == .recording else { return postProcessingStatus }
+        return hudKeyboardCommandsAvailable
+            ? "Enter confirm, Esc cancel"
+            : "Use buttons or Right Ctrl; enable Accessibility for Enter/Esc"
+    }
+
     func handleHotKey() {
         switch phase {
         case .idle, .error:
@@ -209,6 +228,7 @@ final class SoundFlowModel: ObservableObject {
     }
 
     func dismissHUD() {
+        hudKeyCommandMonitor.stop()
         cancelPendingCommit()
         setPhase(.idle)
         errorMessage = nil
@@ -255,11 +275,13 @@ final class SoundFlowModel: ObservableObject {
         audioLevel = 0
         postProcessingStatus = "Idle"
         setPhase(.recording)
+        hudKeyboardCommandsAvailable = hudKeyCommandMonitor.start()
         showHUD()
     }
 
     private func commitRecording() {
         guard phase == .recording else { return }
+        hudKeyCommandMonitor.stop()
         cancelPendingCommit()
 
         setPhase(.processing)
@@ -373,6 +395,7 @@ final class SoundFlowModel: ObservableObject {
     }
 
     private func cancelRecording() {
+        hudKeyCommandMonitor.stop()
         cancelPendingCommit()
         if phase == .recording {
             audioCaptureService.stop()
@@ -410,6 +433,7 @@ final class SoundFlowModel: ObservableObject {
     }
 
     private func hideHUD() {
+        hudKeyCommandMonitor.stop()
         isHUDVisible = false
         hudController?.hide()
     }
@@ -443,30 +467,6 @@ final class SoundFlowModel: ObservableObject {
         pendingCommitWorkItem = nil
     }
 
-    private func installKeyMonitor() {
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, isHUDVisible else { return event }
-
-            switch Int(event.keyCode) {
-            case Int(kVK_Escape):
-                cancelRecording()
-                return nil
-            case Int(kVK_Return), Int(kVK_ANSI_KeypadEnter),
-                 Int(kVK_Control), Int(kVK_RightControl):
-                if phase == .recording {
-                    requestCommitWithFeedback()
-                    return nil
-                }
-                if phase == .error {
-                    dismissHUD()
-                    return nil
-                }
-                return event
-            default:
-                return event
-            }
-        }
-    }
 }
 
 enum RecordingPhase: String {

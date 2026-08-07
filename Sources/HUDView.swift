@@ -37,7 +37,6 @@ struct HUDView: View {
                         .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .multilineTextAlignment(.leading)
-                        .textSelection(.enabled)
 
                     Color.clear
                         .frame(height: 1)
@@ -55,7 +54,7 @@ struct HUDView: View {
             }
 
             HStack {
-                Text(model.phase == .recording ? "Enter confirm, Esc cancel" : model.postProcessingStatus)
+                Text(model.hudKeyboardHint)
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -68,7 +67,6 @@ struct HUDView: View {
                         model.dismissHUD()
                     }
                 }
-                .keyboardShortcut(.cancelAction)
 
                 Button(model.primaryActionTitle) {
                     if model.phase == .recording {
@@ -77,7 +75,6 @@ struct HUDView: View {
                         model.dismissHUD()
                     }
                 }
-                .keyboardShortcut(.defaultAction)
                 .disabled(model.phase != .recording && model.phase != .error)
             }
         }
