@@ -1,6 +1,6 @@
 import Carbon
-import XCTest
 @testable import SoundFlow
+import XCTest
 
 final class HUDKeyCommandMonitorTests: XCTestCase {
     func testEscapeMapsToCancel() {
