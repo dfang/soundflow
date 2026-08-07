@@ -248,7 +248,6 @@ final class SoundFlowModel: ObservableObject {
         errorMessage = nil
         lastCommittedText = ""
         showSuccess = false
-        targetApplication = captureCurrentTargetApplication()
 
         let microphoneGranted = await permissionManager.requestMicrophonePermission()
         guard microphoneGranted else {
@@ -281,6 +280,7 @@ final class SoundFlowModel: ObservableObject {
 
     private func commitRecording() {
         guard phase == .recording else { return }
+        targetApplication = captureCurrentTargetApplication()
         hudKeyCommandMonitor.stop()
         cancelPendingCommit()
 
@@ -466,7 +466,6 @@ final class SoundFlowModel: ObservableObject {
         pendingCommitWorkItem?.cancel()
         pendingCommitWorkItem = nil
     }
-
 }
 
 enum RecordingPhase: String {

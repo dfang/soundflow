@@ -11,6 +11,10 @@ struct TextOutputService {
     private let activationRetryDelay: TimeInterval = 0.06
     private let activationRetryCount = 4
 
+    static func shouldActivateTarget(targetPID: pid_t, frontmostPID: pid_t?) -> Bool {
+        targetPID != frontmostPID
+    }
+
     @discardableResult
     func output(
         _ text: String,
@@ -31,14 +35,17 @@ struct TextOutputService {
     private func activateTargetApplication(_ targetApplication: NSRunningApplication?) -> Bool {
         guard let targetApplication, targetApplication != .current else { return true }
 
-        let targetBundleID = targetApplication.bundleIdentifier
+        let targetPID = targetApplication.processIdentifier
+        let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        guard Self.shouldActivateTarget(targetPID: targetPID, frontmostPID: frontmostPID) else {
+            return true
+        }
 
         for attempt in 0 ..< activationRetryCount {
             targetApplication.unhide()
             _ = targetApplication.activate(options: [.activateAllWindows])
 
-            let frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-            if frontmostBundleID == targetBundleID {
+            if NSWorkspace.shared.frontmostApplication?.processIdentifier == targetPID {
                 return true
             }
 
