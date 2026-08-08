@@ -27,6 +27,7 @@ final class SoundFlowModel: ObservableObject {
 
     private let permissionManager = PermissionManager()
     private let audioCaptureService = AudioCaptureService()
+    private let systemAudioSilencer = SystemAudioSilencer.shared
     private let textOutputService = TextOutputService()
     private let runtime: AppRuntime
     private let transcriptionService: any TranscriptionService
@@ -230,6 +231,7 @@ final class SoundFlowModel: ObservableObject {
     func dismissHUD() {
         hudKeyCommandMonitor.stop()
         cancelPendingCommit()
+        systemAudioSilencer.restore()
         setPhase(.idle)
         errorMessage = nil
         showSuccess = false
@@ -255,9 +257,11 @@ final class SoundFlowModel: ObservableObject {
             return
         }
 
+        systemAudioSilencer.silence()
         do {
             try audioCaptureService.start()
         } catch {
+            systemAudioSilencer.restore()
             setError("Failed to start audio capture: \(error.localizedDescription)")
             return
         }
@@ -266,6 +270,7 @@ final class SoundFlowModel: ObservableObject {
             try transcriptionService.start()
         } catch {
             audioCaptureService.stop()
+            systemAudioSilencer.restore()
             setError("Failed to initialize ASR: \(error.localizedDescription)")
             return
         }
@@ -287,6 +292,7 @@ final class SoundFlowModel: ObservableObject {
         setPhase(.processing)
         postProcessingStatus = "正在整理文本..."
         audioCaptureService.stop()
+        systemAudioSilencer.restore()
 
         Task {
             do {
@@ -401,6 +407,7 @@ final class SoundFlowModel: ObservableObject {
             audioCaptureService.stop()
             transcriptionService.cancel()
         }
+        systemAudioSilencer.restore()
 
         setPhase(.idle)
         showSuccess = false
@@ -412,6 +419,7 @@ final class SoundFlowModel: ObservableObject {
 
     private func setError(_ message: String) {
         cancelPendingCommit()
+        systemAudioSilencer.restore()
         errorMessage = message
         showSuccess = false
         previewText = message
