@@ -2,6 +2,13 @@ import Foundation
 import os
 
 final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unchecked Sendable {
+    private struct ResamplerState {
+        let inputSampleRate: Int
+        let resampler: SherpaOnnxLinearResamplerWrapper
+    }
+
+    private static let processingSampleRate = 16000
+
     private let logger = AppLogger.logger(for: .transcription)
     let displayName = ASRBackend.sherpaSenseVoice.rawValue
     let model: ModelDescriptor
@@ -10,134 +17,122 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
     private let lock = NSLock()
     private let decodeQueue = DispatchQueue(label: "app.soundflow.asr.decode")
     private var bufferedSamples: [Float] = []
-    private var sampleRate = 16000
     private var sessionID: UInt64 = 0
     private var latestPreviewText = ""
     private var lastPreviewSampleCount = 0
-    private var lastQueuedPreviewSampleCount = 0
     private var previewDecodeInFlight = false
     private var speechDetected = false
-    private var recognizer: SherpaOnnxOfflineRecognizerWrapper?
-    private var vad: SherpaOnnxVoiceActivityDetectorWrapper?
+    private var isAcceptingAudio = false
+    private var resamplerState: ResamplerState?
+    private var recognizer: (any OfflineSpeechRecognizing)?
+    private var vad: (any VoiceActivityDetecting)?
+    private let recognizerFactory: @Sendable () throws -> any OfflineSpeechRecognizing
+    private let vadFactory: @Sendable () throws -> any VoiceActivityDetecting
 
-    private let minimumPreviewSamples = 3200
-    private let previewStrideSamples = 1600
-    private let previewReuseSlackSamples = 8000
-    private let previewCoverageThreshold = 0.80
-    private let previewReuseWaitMillis = 160
-    private let previewReusePollMillis = 20
+    private let minimumPreviewDuration: TimeInterval = 0.2
+    private let previewStrideDuration: TimeInterval = 0.1
 
     init(model: ModelDescriptor) {
         self.model = model
+        recognizerFactory = { try Self.makeDefaultRecognizer() }
+        vadFactory = { try Self.makeDefaultVAD() }
+    }
+
+    init(
+        model: ModelDescriptor,
+        recognizerFactory: @escaping @Sendable () throws -> any OfflineSpeechRecognizing,
+        vadFactory: @escaping @Sendable () throws -> any VoiceActivityDetecting
+    ) {
+        self.model = model
+        self.recognizerFactory = recognizerFactory
+        self.vadFactory = vadFactory
     }
 
     func start() throws {
         _ = try prepareRecognizerIfNeeded()
-        let vad = try prepareVADIfNeeded()
+        _ = try prepareVADIfNeeded()
 
         lock.lock()
-        sessionID &+= 1
-        bufferedSamples.removeAll(keepingCapacity: true)
-        sampleRate = 16000
-        latestPreviewText = ""
-        lastPreviewSampleCount = 0
-        lastQueuedPreviewSampleCount = 0
-        previewDecodeInFlight = false
-        speechDetected = false
-        vad.reset()
-        vad.clear()
+        resetSessionState(keepingBufferCapacity: true)
+        isAcceptingAudio = true
         lock.unlock()
 
         AppLogger.info("Transcription started", category: .transcription)
     }
 
     func appendAudio(samples: [Float], sampleRate: Int) {
-        guard !samples.isEmpty else { return }
+        guard !samples.isEmpty, sampleRate > 0 else { return }
 
         var snapshot: [Float] = []
-        var snapshotRate = sampleRate
         var snapshotSessionID: UInt64 = 0
 
         lock.lock()
-        self.sampleRate = sampleRate
-        bufferedSamples.append(contentsOf: samples)
-        let vad = vad
-        vad?.acceptWaveform(samples: samples)
-
-        if !speechDetected {
-            if (vad?.isSpeechDetected() == true) || (vad?.isEmpty() == false) {
-                speechDetected = true
-            }
+        guard isAcceptingAudio else {
+            lock.unlock()
+            return
         }
+        let processedSamples: [Float]
+        do {
+            processedSamples = try resampleForProcessing(
+                samples: samples,
+                inputSampleRate: sampleRate
+            )
+        } catch {
+            lock.unlock()
+            AppLogger.error("Audio resampling failed: \(error.localizedDescription)", category: .transcription)
+            return
+        }
+
+        guard !processedSamples.isEmpty else {
+            lock.unlock()
+            return
+        }
+
+        bufferedSamples.append(contentsOf: processedSamples)
+        let vad = vad
+        vad?.acceptWaveform(samples: processedSamples)
+        refreshSpeechDetection()
 
         guard speechDetected else {
             lock.unlock()
             return
         }
 
-        let enoughAudio = bufferedSamples.count >= minimumPreviewSamples
-        let enoughDelta = bufferedSamples.count - lastPreviewSampleCount >= previewStrideSamples
+        let bufferedDuration = TimeInterval(bufferedSamples.count) / TimeInterval(Self.processingSampleRate)
+        let undecodedDuration = TimeInterval(bufferedSamples.count - lastPreviewSampleCount)
+            / TimeInterval(Self.processingSampleRate)
+        let enoughAudio = bufferedDuration >= minimumPreviewDuration
+        let enoughDelta = undecodedDuration >= previewStrideDuration
         if enoughAudio, enoughDelta, !previewDecodeInFlight {
             previewDecodeInFlight = true
             snapshot = bufferedSamples
-            snapshotRate = self.sampleRate
             snapshotSessionID = sessionID
-            lastQueuedPreviewSampleCount = snapshot.count
         }
         lock.unlock()
 
         guard !snapshot.isEmpty else { return }
-        requestPreviewDecode(samples: snapshot, sampleRate: snapshotRate, sessionID: snapshotSessionID)
+        requestPreviewDecode(samples: snapshot, sessionID: snapshotSessionID)
     }
 
     func stop() async throws -> String {
-        flushPendingSpeechIfNeeded()
-        var payload = snapshotState()
+        let samples = try finishAudioSession()
 
-        guard !payload.samples.isEmpty else {
-            resetState()
-            return ""
-        }
+        guard !samples.isEmpty else { return "" }
 
-        if payload.previewDecodeInFlight, shouldLikelyReusePreview(payload: payload) {
-            let deadline = ContinuousClock.now + .milliseconds(previewReuseWaitMillis)
-            while ContinuousClock.now < deadline {
-                try? await Task.sleep(for: .milliseconds(previewReusePollMillis))
-                payload = snapshotState()
-                if !payload.previewDecodeInFlight {
-                    break
-                }
-            }
-        }
-
-        let normalizedPreview = Self.normalize(payload.latestPreviewText)
-        if shouldReusePreview(payload: payload, normalizedPreview: normalizedPreview) {
-            resetState()
-            return normalizedPreview
-        }
-
-        resetState()
-        let rawText = try await decode(samples: payload.samples, sampleRate: payload.sampleRate)
+        let rawText = try await decode(samples: samples)
 
         return Self.normalize(rawText)
     }
 
     func cancel() {
         lock.lock()
-        sessionID &+= 1
-        bufferedSamples.removeAll(keepingCapacity: false)
-        sampleRate = 16000
-        latestPreviewText = ""
-        lastPreviewSampleCount = 0
-        lastQueuedPreviewSampleCount = 0
-        previewDecodeInFlight = false
-        speechDetected = false
-        vad?.reset()
-        vad?.clear()
+        resetSessionState(keepingBufferCapacity: false)
         lock.unlock()
     }
+}
 
-    private func prepareRecognizerIfNeeded() throws -> SherpaOnnxOfflineRecognizerWrapper {
+private extension SherpaOnnxSenseVoiceTranscriptionService {
+    private func prepareRecognizerIfNeeded() throws -> any OfflineSpeechRecognizing {
         lock.lock()
         if let recognizer {
             lock.unlock()
@@ -145,6 +140,19 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
         }
         lock.unlock()
 
+        let recognizer = try recognizerFactory()
+
+        lock.lock()
+        if self.recognizer == nil {
+            self.recognizer = recognizer
+        }
+        let resolved = self.recognizer ?? recognizer
+        lock.unlock()
+
+        return resolved
+    }
+
+    private static func makeDefaultRecognizer() throws -> any OfflineSpeechRecognizing {
         let modelPaths = try ModelPathResolver.resolveSenseVoiceSmallPaths()
         let senseVoiceConfig = sherpaOnnxOfflineSenseVoiceModelConfig(
             model: modelPaths.model.path,
@@ -159,19 +167,10 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
             featConfig: featureConfig,
             modelConfig: modelConfig
         )
-        let recognizer = try SherpaOnnxOfflineRecognizerWrapper(config: &config)
-
-        lock.lock()
-        if self.recognizer == nil {
-            self.recognizer = recognizer
-        }
-        let resolved = self.recognizer ?? recognizer
-        lock.unlock()
-
-        return resolved
+        return try SherpaOnnxOfflineRecognizerWrapper(config: &config)
     }
 
-    private func prepareVADIfNeeded() throws -> SherpaOnnxVoiceActivityDetectorWrapper {
+    private func prepareVADIfNeeded() throws -> any VoiceActivityDetecting {
         lock.lock()
         if let vad {
             lock.unlock()
@@ -179,6 +178,19 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
         }
         lock.unlock()
 
+        let vad = try vadFactory()
+
+        lock.lock()
+        if self.vad == nil {
+            self.vad = vad
+        }
+        let resolved = self.vad ?? vad
+        lock.unlock()
+
+        return resolved
+    }
+
+    private static func makeDefaultVAD() throws -> any VoiceActivityDetecting {
         let vadPaths = try ModelPathResolver.resolveVADModelPaths()
         let sileroConfig = sherpaOnnxSileroVadModelConfig(
             model: vadPaths.model.path,
@@ -195,72 +207,98 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
             provider: "cpu",
             debug: 0
         )
-        let vad = try SherpaOnnxVoiceActivityDetectorWrapper(config: &config)
+        return try SherpaOnnxVoiceActivityDetectorWrapper(config: &config)
+    }
 
+    private func finishAudioSession() throws -> [Float] {
         lock.lock()
-        if self.vad == nil {
-            self.vad = vad
+        defer { lock.unlock() }
+
+        isAcceptingAudio = false
+        do {
+            try flushResampler()
+            flushPendingSpeech()
+            let samples = bufferedSamples
+            resetSessionState(keepingBufferCapacity: false)
+            return samples
+        } catch {
+            resetSessionState(keepingBufferCapacity: false)
+            throw error
         }
-        let resolved = self.vad ?? vad
-        lock.unlock()
-
-        return resolved
     }
 
-    private func snapshotState() -> (
-        samples: [Float],
-        sampleRate: Int,
-        latestPreviewText: String,
-        lastPreviewSampleCount: Int,
-        lastQueuedPreviewSampleCount: Int,
-        previewDecodeInFlight: Bool
-    ) {
-        lock.lock()
-        let payload = (
-            samples: bufferedSamples,
-            sampleRate: sampleRate,
-            latestPreviewText: latestPreviewText,
-            lastPreviewSampleCount: lastPreviewSampleCount,
-            lastQueuedPreviewSampleCount: lastQueuedPreviewSampleCount,
-            previewDecodeInFlight: previewDecodeInFlight
-        )
-        lock.unlock()
-        return payload
-    }
+    private func resampleForProcessing(samples: [Float], inputSampleRate: Int) throws -> [Float] {
+        var processedSamples: [Float] = []
 
-    private func flushPendingSpeechIfNeeded() {
-        lock.lock()
-        if !speechDetected {
-            vad?.flush()
-            if (vad?.isSpeechDetected() == true) || (vad?.isEmpty() == false) {
-                speechDetected = true
-            }
+        if let state = resamplerState, state.inputSampleRate != inputSampleRate {
+            processedSamples = try state.resampler.resample(samples: [], flush: true)
+            resamplerState = nil
         }
-        lock.unlock()
+
+        guard inputSampleRate != Self.processingSampleRate else {
+            processedSamples.append(contentsOf: samples)
+            return processedSamples
+        }
+
+        if resamplerState == nil {
+            let resampler = try SherpaOnnxLinearResamplerWrapper(
+                inputSampleRate: inputSampleRate,
+                outputSampleRate: Self.processingSampleRate
+            )
+            resamplerState = ResamplerState(
+                inputSampleRate: inputSampleRate,
+                resampler: resampler
+            )
+        }
+
+        guard let resamplerState else { return [] }
+        let resampledSamples = try resamplerState.resampler.resample(samples: samples, flush: false)
+        processedSamples.append(contentsOf: resampledSamples)
+        return processedSamples
     }
 
-    private func resetState() {
-        lock.lock()
+    private func flushResampler() throws {
+        guard let resamplerState else { return }
+        let finalSamples = try resamplerState.resampler.resample(samples: [], flush: true)
+        self.resamplerState = nil
+
+        guard !finalSamples.isEmpty else { return }
+        bufferedSamples.append(contentsOf: finalSamples)
+        vad?.acceptWaveform(samples: finalSamples)
+        refreshSpeechDetection()
+    }
+
+    private func flushPendingSpeech() {
+        guard !speechDetected else { return }
+        vad?.flush()
+        refreshSpeechDetection()
+    }
+
+    private func refreshSpeechDetection() {
+        guard !speechDetected else { return }
+        speechDetected = (vad?.isSpeechDetected() == true) || (vad?.isEmpty() == false)
+    }
+
+    private func resetSessionState(keepingBufferCapacity: Bool) {
         sessionID &+= 1
-        bufferedSamples.removeAll(keepingCapacity: false)
-        sampleRate = 16000
+        bufferedSamples.removeAll(keepingCapacity: keepingBufferCapacity)
         latestPreviewText = ""
         lastPreviewSampleCount = 0
-        lastQueuedPreviewSampleCount = 0
         previewDecodeInFlight = false
         speechDetected = false
+        isAcceptingAudio = false
+        resamplerState = nil
         vad?.reset()
         vad?.clear()
-        lock.unlock()
     }
 
-    private func requestPreviewDecode(samples: [Float], sampleRate: Int, sessionID: UInt64) {
+    private func requestPreviewDecode(samples: [Float], sessionID: UInt64) {
         decodeQueue.async { [weak self] in
             guard let self else { return }
 
             let previewText: String
             do {
-                let text = try decodeSynchronously(samples: samples, sampleRate: sampleRate)
+                let text = try decodeSynchronously(samples: samples)
                 previewText = Self.normalize(text)
             } catch {
                 previewText = ""
@@ -283,7 +321,7 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
         }
     }
 
-    private func decode(samples: [Float], sampleRate: Int) async throws -> String {
+    private func decode(samples: [Float]) async throws -> String {
         try await withCheckedThrowingContinuation { continuation in
             decodeQueue.async { [weak self] in
                 guard let self else {
@@ -292,7 +330,7 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
                 }
 
                 do {
-                    let text = try decodeSynchronously(samples: samples, sampleRate: sampleRate)
+                    let text = try decodeSynchronously(samples: samples)
                     continuation.resume(returning: text)
                 } catch {
                     continuation.resume(throwing: error)
@@ -301,45 +339,9 @@ final class SherpaOnnxSenseVoiceTranscriptionService: TranscriptionService, @unc
         }
     }
 
-    private func decodeSynchronously(samples: [Float], sampleRate: Int) throws -> String {
+    private func decodeSynchronously(samples: [Float]) throws -> String {
         let recognizer = try prepareRecognizerIfNeeded()
-        let result = try recognizer.decode(samples: samples, sampleRate: sampleRate)
-        return result.text
-    }
-
-    private func shouldLikelyReusePreview(
-        payload: (
-            samples: [Float],
-            sampleRate: Int,
-            latestPreviewText: String,
-            lastPreviewSampleCount: Int,
-            lastQueuedPreviewSampleCount: Int,
-            previewDecodeInFlight: Bool
-        )
-    ) -> Bool {
-        let totalSamples = max(payload.samples.count, 1)
-        let queuedCoverage = Double(payload.lastQueuedPreviewSampleCount) / Double(totalSamples)
-        return queuedCoverage >= previewCoverageThreshold
-    }
-
-    private func shouldReusePreview(
-        payload: (
-            samples: [Float],
-            sampleRate: Int,
-            latestPreviewText: String,
-            lastPreviewSampleCount: Int,
-            lastQueuedPreviewSampleCount: Int,
-            previewDecodeInFlight: Bool
-        ),
-        normalizedPreview: String
-    ) -> Bool {
-        guard !normalizedPreview.isEmpty else { return false }
-
-        let totalSamples = max(payload.samples.count, 1)
-        let decodedCoverage = Double(payload.lastPreviewSampleCount) / Double(totalSamples)
-        let undecodedTailSamples = max(0, payload.samples.count - payload.lastPreviewSampleCount)
-
-        return decodedCoverage >= previewCoverageThreshold || undecodedTailSamples <= previewReuseSlackSamples
+        return try recognizer.transcribe(samples: samples, sampleRate: Self.processingSampleRate)
     }
 
     private static func normalize(_ text: String) -> String {

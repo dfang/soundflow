@@ -3,6 +3,8 @@ import Foundation
 
 enum SherpaOnnxError: LocalizedError {
     case recognizerCreationFailed
+    case resamplerCreationFailed
+    case resamplingFailed
     case streamCreationFailed
     case resultUnavailable
     case vadCreationFailed
@@ -11,6 +13,10 @@ enum SherpaOnnxError: LocalizedError {
         switch self {
         case .recognizerCreationFailed:
             return "Failed to create sherpa-onnx recognizer."
+        case .resamplerCreationFailed:
+            return "Failed to create sherpa-onnx audio resampler."
+        case .resamplingFailed:
+            return "sherpa-onnx failed to resample audio."
         case .streamCreationFailed:
             return "Failed to create sherpa-onnx offline stream."
         case .resultUnavailable:
@@ -19,6 +25,19 @@ enum SherpaOnnxError: LocalizedError {
             return "Failed to create sherpa-onnx voice activity detector."
         }
     }
+}
+
+protocol OfflineSpeechRecognizing: AnyObject, Sendable {
+    func transcribe(samples: [Float], sampleRate: Int) throws -> String
+}
+
+protocol VoiceActivityDetecting: AnyObject, Sendable {
+    func acceptWaveform(samples: [Float])
+    func isSpeechDetected() -> Bool
+    func isEmpty() -> Bool
+    func reset()
+    func clear()
+    func flush()
 }
 
 func sherpaToCPointer(_ string: String) -> UnsafePointer<Int8>! {
@@ -268,6 +287,56 @@ final class SherpaOnnxOfflineRecognizerWrapper: @unchecked Sendable {
     }
 }
 
+extension SherpaOnnxOfflineRecognizerWrapper: OfflineSpeechRecognizing {
+    func transcribe(samples: [Float], sampleRate: Int) throws -> String {
+        try decode(samples: samples, sampleRate: sampleRate).text
+    }
+}
+
+final class SherpaOnnxLinearResamplerWrapper {
+    private let resampler: OpaquePointer
+
+    init(inputSampleRate: Int, outputSampleRate: Int) throws {
+        let minimumSampleRate = Float(min(inputSampleRate, outputSampleRate))
+        let filterCutoff = 0.99 * 0.5 * minimumSampleRate
+        guard let resampler = SherpaOnnxCreateLinearResampler(
+            Int32(inputSampleRate),
+            Int32(outputSampleRate),
+            filterCutoff,
+            6
+        ) else {
+            throw SherpaOnnxError.resamplerCreationFailed
+        }
+        self.resampler = resampler
+    }
+
+    deinit {
+        SherpaOnnxDestroyLinearResampler(resampler)
+    }
+
+    func resample(samples: [Float], flush: Bool) throws -> [Float] {
+        let output = samples.withUnsafeBufferPointer { buffer in
+            SherpaOnnxLinearResamplerResample(
+                resampler,
+                buffer.baseAddress,
+                Int32(buffer.count),
+                flush ? 1 : 0
+            )
+        }
+        guard let output else {
+            throw SherpaOnnxError.resamplingFailed
+        }
+        defer { SherpaOnnxLinearResamplerResampleFree(output) }
+
+        let count = Int(output.pointee.n)
+        guard count > 0 else { return [] }
+        guard let outputSamples = output.pointee.samples else {
+            throw SherpaOnnxError.resamplingFailed
+        }
+        return Array(UnsafeBufferPointer(start: outputSamples, count: count))
+    }
+}
+
 final class SherpaOnnxVoiceActivityDetectorWrapper: @unchecked Sendable {
     private let vad: OpaquePointer
 
@@ -313,3 +382,5 @@ final class SherpaOnnxVoiceActivityDetectorWrapper: @unchecked Sendable {
         }
     }
 }
+
+extension SherpaOnnxVoiceActivityDetectorWrapper: VoiceActivityDetecting {}

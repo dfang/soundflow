@@ -2,6 +2,74 @@ import AVFoundation
 import CoreAudio
 import Foundation
 
+final class AudioSampleDeliveryQueue: @unchecked Sendable {
+    struct Generation {
+        fileprivate let value: UInt64
+    }
+
+    private let queue: DispatchQueue
+    private let queueKey = DispatchSpecificKey<UInt8>()
+    private let condition = NSCondition()
+    private var currentGeneration: UInt64 = 0
+    private var isAcceptingDeliveries = false
+    private var inFlightPreparations = 0
+
+    init(label: String) {
+        queue = DispatchQueue(label: label)
+        queue.setSpecific(key: queueKey, value: 1)
+    }
+
+    func start() -> Generation {
+        condition.lock()
+        defer { condition.unlock() }
+
+        currentGeneration &+= 1
+        isAcceptingDeliveries = true
+        return Generation(value: currentGeneration)
+    }
+
+    @discardableResult
+    func enqueue(
+        for generation: Generation,
+        prepare: () -> (@Sendable () -> Void)
+    ) -> Bool {
+        condition.lock()
+        guard isAcceptingDeliveries, generation.value == currentGeneration else {
+            condition.unlock()
+            return false
+        }
+        inFlightPreparations += 1
+        condition.unlock()
+
+        let delivery = prepare()
+        queue.async(execute: delivery)
+
+        condition.lock()
+        inFlightPreparations -= 1
+        if inFlightPreparations == 0 {
+            condition.broadcast()
+        }
+        condition.unlock()
+        return true
+    }
+
+    func stopAndDrain() {
+        precondition(
+            DispatchQueue.getSpecific(key: queueKey) == nil,
+            "AudioSampleDeliveryQueue cannot be stopped from its delivery callback."
+        )
+
+        condition.lock()
+        isAcceptingDeliveries = false
+        while inFlightPreparations > 0 {
+            condition.wait()
+        }
+        condition.unlock()
+
+        queue.sync {}
+    }
+}
+
 final class AudioCaptureService {
     var onLevel: ((Double) -> Void)?
     var onSamples: (([Float], Int) -> Void)?
@@ -10,6 +78,7 @@ final class AudioCaptureService {
     private var isRunning = false
     private var selectedDeviceID: String?
     private let lock = NSLock()
+    private let sampleDeliveryQueue = AudioSampleDeliveryQueue(label: "app.soundflow.audio.samples")
 
     init() {
         NotificationCenter.default.addObserver(
@@ -64,17 +133,30 @@ final class AudioCaptureService {
         let format = inputNode.outputFormat(forBus: 0)
 
         inputNode.removeTap(onBus: 0)
+        let deliveryGeneration = sampleDeliveryQueue.start()
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            let samples = AudioCaptureService.samples(from: buffer)
-            let level = AudioCaptureService.level(from: buffer)
-            self?.onSamples?(samples, Int(format.sampleRate))
-            DispatchQueue.main.async {
-                self?.onLevel?(level)
+            guard let self else { return }
+            sampleDeliveryQueue.enqueue(for: deliveryGeneration) {
+                let samples = AudioCaptureService.samples(from: buffer)
+                let level = AudioCaptureService.level(from: buffer)
+                let sampleRate = Int(format.sampleRate)
+                DispatchQueue.main.async { [weak self] in
+                    self?.onLevel?(level)
+                }
+                return { [weak self] in
+                    self?.onSamples?(samples, sampleRate)
+                }
             }
         }
 
         engine.prepare()
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            sampleDeliveryQueue.stopAndDrain()
+            inputNode.removeTap(onBus: 0)
+            throw error
+        }
         isRunning = true
     }
 
@@ -89,6 +171,7 @@ final class AudioCaptureService {
 
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+        sampleDeliveryQueue.stopAndDrain()
         isRunning = false
 
         DispatchQueue.main.async {
@@ -134,11 +217,8 @@ final class AudioCaptureService {
         let frameLength = Int(buffer.frameLength)
         let channelCount = Int(buffer.format.channelCount)
 
-        guard frameLength > 0,
-              channelCount > 0,
-              let channelData = buffer.floatChannelData else {
-            return []
-        }
+        guard frameLength > 0, channelCount > 0 else { return [] }
+        guard let channelData = buffer.floatChannelData else { return [] }
 
         if channelCount == 1 {
             let channel = channelData[0]

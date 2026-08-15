@@ -259,19 +259,19 @@ final class SoundFlowModel: ObservableObject {
 
         systemAudioSilencer.silence()
         do {
-            try audioCaptureService.start()
+            try transcriptionService.start()
         } catch {
             systemAudioSilencer.restore()
-            setError("Failed to start audio capture: \(error.localizedDescription)")
+            setError("Failed to initialize ASR: \(error.localizedDescription)")
             return
         }
 
         do {
-            try transcriptionService.start()
+            try audioCaptureService.start()
         } catch {
-            audioCaptureService.stop()
+            transcriptionService.cancel()
             systemAudioSilencer.restore()
-            setError("Failed to initialize ASR: \(error.localizedDescription)")
+            setError("Failed to start audio capture: \(error.localizedDescription)")
             return
         }
 
