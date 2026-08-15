@@ -1,5 +1,5 @@
-@testable import SoundFlow
 import XCTest
+@testable import SoundFlow
 
 final class TextOutputServiceTests: XCTestCase {
     func testAlreadyFrontmostTargetDoesNotNeedActivation() {

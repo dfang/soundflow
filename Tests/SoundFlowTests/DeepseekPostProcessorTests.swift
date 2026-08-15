@@ -39,6 +39,14 @@ final class DeepseekPostProcessorTests: XCTestCase {
         XCTAssertEqual(result, "这个版本可以吗？")
     }
 
+    func testMissingAPIKeyPreservesExistingPeriod() async {
+        let processor = DeepseekPostProcessor(model: ModelCatalog.defaultPostProcessorModel)
+
+        let result = await processor.process("这个版本已经完成。")
+
+        XCTAssertEqual(result, "这个版本已经完成。")
+    }
+
     func testStreamFailureAfterContentDiscardsPartialOutput() async {
         URLProtocol.registerClass(PartialFailureURLProtocol.self)
         defer { URLProtocol.unregisterClass(PartialFailureURLProtocol.self) }

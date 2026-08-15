@@ -1,6 +1,6 @@
 import AppKit
-@testable import SoundFlow
 import XCTest
+@testable import SoundFlow
 
 final class PassiveHUDPanelTests: XCTestCase {
     func testPanelCannotActivateOrBecomeKey() {

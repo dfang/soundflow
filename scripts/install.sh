@@ -6,6 +6,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="SoundFlow"
 APP_BUNDLE="$ROOT_DIR/dist/$APP_NAME.app"
 DEST="/Applications/$APP_NAME.app"
+LEGACY_STAGE_DIR="$ROOT_DIR/dist/dmg"
+LEGACY_APP_BUNDLE="$LEGACY_STAGE_DIR/$APP_NAME.app"
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 
 "$ROOT_DIR/scripts/build_app.sh"
 
@@ -23,10 +26,14 @@ if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
     fi
 fi
 
-if [[ -d "$DEST" ]]; then
-    rm -rf "$DEST"
+if [[ -x "$LSREGISTER" ]]; then
+    "$LSREGISTER" -u "$LEGACY_APP_BUNDLE" >/dev/null 2>&1 || true
 fi
-
-cp -R "$APP_BUNDLE" "$DEST"
+rm -rf "$LEGACY_STAGE_DIR"
+rm -rf "$DEST"
+ditto "$APP_BUNDLE" "$DEST"
+if [[ -x "$LSREGISTER" ]]; then
+    "$LSREGISTER" -f "$DEST" >/dev/null
+fi
 echo "Installed $APP_NAME to $DEST"
-echo "Run: open -a $APP_NAME"
+echo "Run: open $DEST"

@@ -7,12 +7,23 @@ struct DictionaryEntry: Codable, Equatable, Hashable {
 
 enum TextDictionaries {
     static var system: [DictionaryEntry] {
-        guard let url = Bundle.main.url(forResource: "system_dictionary", withExtension: "json"),
-              let data = try? Data(contentsOf: url),
-              let entries = try? JSONDecoder().decode([DictionaryEntry].self, from: data) else {
-            return []
+        if let mainURL = Bundle.main.url(forResource: "system_dictionary", withExtension: "json") {
+            if let data = try? Data(contentsOf: mainURL),
+               let entries = try? JSONDecoder().decode([DictionaryEntry].self, from: data) {
+                return entries
+            }
         }
-        return entries
+
+        #if SWIFT_PACKAGE
+            if let moduleURL = Bundle.module.url(forResource: "system_dictionary", withExtension: "json") {
+                if let data = try? Data(contentsOf: moduleURL),
+                   let entries = try? JSONDecoder().decode([DictionaryEntry].self, from: data) {
+                    return entries
+                }
+            }
+        #endif
+
+        return []
     }
 
     static func loadUserDictionary() -> [DictionaryEntry] {
@@ -38,7 +49,11 @@ enum TextDictionaries {
         let allEntries = system + user
 
         for entry in allEntries {
-            let pattern = "\\b" + NSRegularExpression.escapedPattern(for: entry.from) + "\\b"
+            let isHan = entry.from.range(of: "\\p{Han}", options: .regularExpression) != nil
+            let escaped = NSRegularExpression.escapedPattern(for: entry.from)
+            let pattern = isHan
+                ? escaped
+                : "(?<=^|\\s|[\\p{P}\\p{S}\\p{Han}])" + escaped + "(?=$|\\s|[\\p{P}\\p{S}\\p{Han}])"
             if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
                 let range = NSRange(result.startIndex..., in: result)
                 result = regex.stringByReplacingMatches(

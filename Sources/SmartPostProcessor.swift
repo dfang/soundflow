@@ -33,16 +33,12 @@ struct SmartPostProcessor: TextPostProcessing {
         return AsyncThrowingStream { continuation in
             Task {
                 let stream = wrapped.processStream(rawText: trimmed)
-                var candidate = ""
-                var didFallbackOnError = false
-
                 do {
                     for try await token in stream {
-                        candidate += token
                         continuation.yield(token)
                     }
                 } catch {
-                    didFallbackOnError = true
+                    // Stream failed, continuation will finish
                 }
 
                 continuation.finish()

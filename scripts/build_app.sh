@@ -8,7 +8,10 @@ APP_BUNDLE="$ROOT_DIR/dist/$APP_NAME.app"
 CONTENTS_DIR="$APP_BUNDLE/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
+RESOURCES_DIR="$CONTENTS_DIR/Resources"
 EXECUTABLE_PATH="$ROOT_DIR/.build/release/$APP_NAME"
+RESOURCE_BUNDLE_NAME="${APP_NAME}_${APP_NAME}.bundle"
+RESOURCE_DICTIONARY_PATH="$ROOT_DIR/.build/release/$RESOURCE_BUNDLE_NAME/system_dictionary.json"
 PLIST_TEMPLATE="$ROOT_DIR/packaging/Info.plist"
 VERSION="${VERSION:-0.1.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-1}"
@@ -60,12 +63,17 @@ if [[ ! -f "$EXECUTABLE_PATH" ]]; then
     echo "Expected executable not found at $EXECUTABLE_PATH" >&2
     exit 1
 fi
+if [[ ! -f "$RESOURCE_DICTIONARY_PATH" ]]; then
+    echo "Expected dictionary resource not found at $RESOURCE_DICTIONARY_PATH" >&2
+    exit 1
+fi
 
 rm -rf "$APP_BUNDLE"
-mkdir -p "$MACOS_DIR" "$FRAMEWORKS_DIR"
+mkdir -p "$MACOS_DIR" "$FRAMEWORKS_DIR" "$RESOURCES_DIR"
 
 cp "$EXECUTABLE_PATH" "$MACOS_DIR/$APP_NAME"
 cp "$PLIST_TEMPLATE" "$CONTENTS_DIR/Info.plist"
+cp "$RESOURCE_DICTIONARY_PATH" "$RESOURCES_DIR/system_dictionary.json"
 
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$CONTENTS_DIR/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$CONTENTS_DIR/Info.plist"

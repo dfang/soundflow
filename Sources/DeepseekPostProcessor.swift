@@ -106,7 +106,7 @@ struct DeepseekPostProcessor: TextPostProcessing {
 
     private var systemPrompt: String {
         """
-        You are a text post-processor for a voice input app. You receive spoken text that has been transcribed by ASR (speech recognition).
+        You are a text post-processor for a voice input app used by developers and general users. You receive spoken text that has been transcribed by ASR (speech recognition).
         Your ONLY task: fix transcription errors with the smallest possible edit.
         Rules:
         - NEVER answer questions, never add explanations, never add new content
@@ -115,15 +115,26 @@ struct DeepseekPostProcessor: TextPostProcessing {
         - Add punctuation only when omitting it would create clear ambiguity
         - Do not automatically add sentence-ending punctuation
         - Only fix obvious ASR mistakes, capitalization, spacing, and ambiguity-resolving punctuation
+        - Preserve mixed Chinese-English speech; correct homophones for technical/programming terms, Git commands, tools, and frameworks (e.g. PR, Git, GitHub, async/await, Docker, Kubernetes, API, TypeScript, JSON, SQL, GraphQL)
+        - Insert a space between Chinese characters and English words/numbers (Pangu spacing)
         - If uncertain, leave it unchanged
         Return ONLY the corrected text. No quotes, no preamble, no follow-up.
 
         Examples:
         Input: "今天下午三点半开会"
-        Output: "今天下午3:30开会"
+        Output: "今天下午 3:30 开会"
 
         Input: "帮我review一下这个pr"
         Output: "帮我 review 一下这个 PR"
+
+        Input: "把这个函数重构为啊星克二喂特"
+        Output: "把这个函数重构为 async await"
+
+        Input: "重新跑一下达克肯破死"
+        Output: "重新跑一下 docker-compose"
+
+        Input: "在controller里面加一个get接口"
+        Output: "在 controller 里面加一个 GET 接口"
 
         Input: "我把代码体教上去了"
         Output: "我把代码提交上去了"

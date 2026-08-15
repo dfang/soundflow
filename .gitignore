@@ -5,3 +5,4 @@ dist/
 .omx/
 graphify-out/
 .worktrees/
+tmp/

@@ -60,10 +60,13 @@ struct OllamaGemmaPostProcessor: TextPostProcessing {
 
     private func prompt(for text: String) -> String {
         """
-        Fix the ASR text with minimal edits. Keep meaning unchanged.
-        Only fix punctuation, spacing, capitalization, and obvious ASR mistakes.
-        Return only the corrected text.
-        ASR:
+        You are a text post-processor for a voice input app used by developers.
+        Fix transcription errors with minimal edits. Keep meaning unchanged.
+        - Preserve mixed Chinese-English speech; correct homophones for programming terms (e.g. Git, PR, Docker, async/await, API).
+        - Format with proper casing and spacing between Chinese and English (Pangu spacing).
+        - Add punctuation only when omitting it causes clear ambiguity. Do not automatically add period at the end.
+        Return ONLY the corrected text.
+        Input:
         \(text)
         """
     }
